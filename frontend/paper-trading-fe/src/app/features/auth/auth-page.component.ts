@@ -37,9 +37,10 @@ export class AuthPageComponent {
 
     request$.subscribe({
       next: (response) => {
-        this.authService.setToken(response.data.token);
-        this.authService.setCurrentUser(response.data.user);
-        this.realtimeService.connect(response.data.user.id);
+        const data = response.data ?? response;
+        this.authService.setToken(data.token);
+        this.authService.setCurrentUser(data.user);
+        this.realtimeService.connect(data.user.id);
         this.router.navigateByUrl('/dashboard');
       },
       error: (error) => {
