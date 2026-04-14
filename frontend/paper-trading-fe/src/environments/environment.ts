@@ -1,4 +1,4 @@
 export const environment = {
   production: false,
-  apiUrl: 'https://YOUR-BACKEND.onrender.com'
+  apiUrl: 'frontend/paper-trading-fe/src/environments/environment.ts'
 };
