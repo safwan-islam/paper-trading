@@ -1,0 +1,16 @@
+.auth-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
+.auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 48px 40px; width: 100%; max-width: 420px; }
+.auth-header { text-align: center; margin-bottom: 32px; }
+.logo { font-size: 48px; margin-bottom: 12px; }
+.auth-header h1 { font-size: 28px; font-weight: 700; color: var(--text); margin: 0 0 8px; }
+.auth-header p { color: var(--muted); font-size: 14px; }
+.form { display: flex; flex-direction: column; gap: 16px; }
+label { display: flex; flex-direction: column; gap: 6px; }
+label span { font-size: 13px; font-weight: 500; color: var(--muted); }
+input { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; color: var(--text); font-size: 14px; outline: none; transition: border-color 0.2s; width: 100%; box-sizing: border-box; }
+input:focus { border-color: var(--accent); }
+button { background: var(--accent); color: #000; border: none; border-radius: 8px; padding: 14px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 8px; transition: opacity 0.2s; width: 100%; }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+.toggle { text-align: center; margin-top: 24px; color: var(--muted); font-size: 14px; }
+.toggle span { color: var(--accent); cursor: pointer; font-weight: 600; }
+.error { background: rgba(255,71,87,0.1); border: 1px solid rgba(255,71,87,0.3); color: var(--red); padding: 12px; border-radius: 8px; font-size: 14px; margin-bottom: 16px; }

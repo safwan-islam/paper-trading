@@ -1,0 +1,5 @@
+node_modules/
+.env
+frontend/paper-trading-fe/node_modules/
+frontend/paper-trading-fe/dist/
+frontend/paper-trading-fe/.angular/

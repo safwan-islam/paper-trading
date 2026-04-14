@@ -1,0 +1,76 @@
+<section class="page">
+  <div class="page-header">
+    <div>
+      <h1>Market</h1>
+      <p class="subtitle">Live crypto prices — updates every 10 seconds</p>
+    </div>
+    <div class="balance-badge">
+      Balance: <strong>${{ (currentUser()?.balance ?? 0) | number:'1.2-2' }}</strong>
+    </div>
+  </div>
+
+  @if (prices().length === 0) {
+    <div class="loading">Connecting to live prices...</div>
+  } @else {
+    <div class="coins-grid">
+      @for (coin of prices(); track coin.id) {
+        <div class="coin-card">
+          <div class="coin-info">
+            <div class="coin-symbol">{{ coin.symbol }}</div>
+            <div class="coin-name">{{ coin.name }}</div>
+          </div>
+          <div class="coin-price">
+            <div class="price">${{ coin.price | number:'1.2-8' }}</div>
+            <div class="change" [class.green]="coin.change24h >= 0" [class.red]="coin.change24h < 0">
+              {{ coin.change24h >= 0 ? '▲' : '▼' }} {{ coin.change24h | number:'1.2-2' }}%
+            </div>
+          </div>
+          <div class="coin-actions">
+            <button class="btn-buy" (click)="openTrade(coin, 'buy')">Buy</button>
+            <button class="btn-sell" (click)="openTrade(coin, 'sell')">Sell</button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</section>
+
+@if (selectedCoin()) {
+  <div class="modal-overlay" (click)="closeTrade()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>{{ tradeType() === 'buy' ? 'Buy' : 'Sell' }} {{ selectedCoin()!.symbol }}</h2>
+        <button class="close-btn" (click)="closeTrade()">✕</button>
+      </div>
+
+      <div class="modal-price">
+        Current Price: <strong>${{ selectedCoin()!.price | number:'1.2-8' }}</strong>
+      </div>
+
+      @if (tradeError()) {
+        <p class="error">{{ tradeError() }}</p>
+      }
+      @if (tradeSuccess()) {
+        <p class="success">{{ tradeSuccess() }}</p>
+      }
+
+      <label>
+        <span>Quantity ({{ selectedCoin()!.symbol }})</span>
+        <input type="number" [ngModel]="quantity()" (ngModelChange)="quantity.set($event)" placeholder="0.00" min="0" step="0.001" />
+      </label>
+
+      <div class="total-row">
+        <span>Total</span>
+        <strong>${{ getTotal() | number:'1.2-2' }}</strong>
+      </div>
+
+      <button
+        [class.btn-buy-modal]="tradeType() === 'buy'"
+        [class.btn-sell-modal]="tradeType() === 'sell'"
+        [disabled]="isSubmitting()"
+        (click)="submitTrade()">
+        {{ isSubmitting() ? 'Processing...' : (tradeType() === 'buy' ? 'Confirm Buy' : 'Confirm Sell') }}
+      </button>
+    </div>
+  </div>
+}

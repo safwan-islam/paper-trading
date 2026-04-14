@@ -1,0 +1,17 @@
+.history-table { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.table-header { display: grid; grid-template-columns: 120px 80px 60px 100px 100px 100px 1fr 120px; padding: 14px 20px; background: var(--bg); font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.table-row { display: grid; grid-template-columns: 120px 80px 60px 100px 100px 100px 1fr 120px; padding: 14px 20px; border-top: 1px solid var(--border); font-size: 14px; color: var(--text); align-items: center; transition: background 0.15s; }
+.table-row:hover { background: var(--bg); }
+.date { color: var(--muted); font-size: 12px; }
+.asset strong { font-size: 15px; }
+.type-badge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; display: inline-block; }
+.type-badge.buy { background: rgba(0,212,170,0.15); color: var(--accent); }
+.type-badge.sell { background: rgba(255,71,87,0.15); color: var(--red); }
+.total { font-weight: 600; }
+.note-cell input { background: var(--bg); border: 1px solid var(--accent); border-radius: 6px; padding: 6px 10px; color: var(--text); font-size: 13px; outline: none; width: 100%; box-sizing: border-box; }
+.note-text { color: var(--muted); font-size: 13px; }
+.actions { display: flex; gap: 6px; }
+.btn-edit { background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+.btn-save { background: rgba(0,212,170,0.15); border: 1px solid rgba(0,212,170,0.3); color: var(--accent); border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+.btn-delete { background: rgba(255,71,87,0.1); border: 1px solid rgba(255,71,87,0.2); color: var(--red); border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+.empty { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 48px; text-align: center; color: var(--muted); }

@@ -1,0 +1,25 @@
+@if (tradeNotification()) {
+  <div class="toast-notification">
+    ✅ {{ tradeNotification() }}
+  </div>
+}
+
+@if (currentUser()) {
+  <nav class="navbar">
+    <a class="brand" routerLink="/dashboard">📈 PaperTrade</a>
+    <div class="nav-links">
+      <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+      <a routerLink="/market" routerLinkActive="active">Market</a>
+      <a routerLink="/history" routerLinkActive="active">History</a>
+    </div>
+    <div class="nav-right">
+      <span class="balance">${{ currentUser()!.balance.toFixed(2) }}</span>
+      <span class="username">{{ currentUser()!.name }}</span>
+      <button (click)="logout()">Sign out</button>
+    </div>
+  </nav>
+}
+
+<main [class.with-nav]="currentUser()">
+  <router-outlet />
+</main>
