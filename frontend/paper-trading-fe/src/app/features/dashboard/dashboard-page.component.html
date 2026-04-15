@@ -4,12 +4,15 @@
       <h1>Portfolio</h1>
       <p class="subtitle">Your virtual trading portfolio</p>
     </div>
-    <button class="btn-primary" (click)="goToMarket()">+ Trade</button>
+    <div class="header-actions">
+      <button class="btn-reload" (click)="reloadBalance()" [disabled]="isReloading()">
+        {{ isReloading() ? '↻ Reloading...' : '↻ Reload' }}
+      </button>
+      <button class="btn-primary" (click)="goToMarket()">+ Trade</button>
+    </div>
   </div>
 
-  @if (pageError()) {
-    <p class="error">{{ pageError() }}</p>
-  }
+  @if (pageError()) { <p class="error">{{ pageError() }}</p> }
 
   @if (isLoading()) {
     <div class="loading">Loading portfolio...</div>
@@ -39,30 +42,62 @@
 
     @if (positions().length === 0) {
       <div class="empty">
-        <p>No open positions. Go to <span (click)="goToMarket()">Market</span> to start trading!</p>
+        <p>No open positions. <span (click)="goToMarket()">Go to Market</span> to start trading!</p>
       </div>
     } @else {
-      <div class="positions-table">
-        <div class="table-header">
-          <span>Asset</span>
-          <span>Qty</span>
-          <span>Avg Buy</span>
-          <span>Current</span>
-          <span>Value</span>
-          <span>P&L</span>
-          <span></span>
-        </div>
+      <div class="positions-grid">
         @for (pos of positions(); track pos._id) {
-          <div class="table-row">
-            <span class="asset-name"><strong>{{ pos.symbol }}</strong> <small>{{ pos.name }}</small></span>
-            <span>{{ pos.quantity | number:'1.0-6' }}</span>
-            <span>${{ pos.avgBuyPrice | number:'1.2-2' }}</span>
-            <span>${{ getCurrentPrice(pos.coinId) | number:'1.2-2' }}</span>
-            <span>${{ getPositionValue(pos) | number:'1.2-2' }}</span>
-            <span [class.green]="getPositionPnl(pos) >= 0" [class.red]="getPositionPnl(pos) < 0">
-              {{ getPositionPnl(pos) >= 0 ? '+' : '' }}${{ getPositionPnl(pos) | number:'1.2-2' }}
-            </span>
-            <span><button class="btn-danger-sm" (click)="removePosition(pos._id)">Remove</button></span>
+          <div class="position-card">
+            <div class="pos-header">
+              <div class="pos-asset">
+                <strong>{{ pos.symbol }}</strong>
+                <small>{{ pos.name }}</small>
+              </div>
+              <div class="pos-pnl" [class.green]="getPositionPnl(pos) >= 0" [class.red]="getPositionPnl(pos) < 0">
+                {{ getPositionPnl(pos) >= 0 ? '+' : '' }}${{ getPositionPnl(pos) | number:'1.2-2' }}
+                <span class="pnl-pct">({{ getPositionPnlPct(pos) | number:'1.2-2' }}%)</span>
+              </div>
+            </div>
+
+            <!-- Sparkline chart -->
+            @if (sparklines()[pos.coinId]) {
+              <div class="sparkline-container">
+                <svg viewBox="0 0 120 40" class="sparkline" preserveAspectRatio="none">
+                  <polyline
+                    [attr.points]="sparklines()[pos.coinId]"
+                    fill="none"
+                    [attr.stroke]="getPositionPnl(pos) >= 0 ? '#00d4aa' : '#ff4757'"
+                    stroke-width="1.5"
+                    stroke-linejoin="round"/>
+                </svg>
+              </div>
+            }
+
+            <div class="pos-details">
+              <div class="pos-detail">
+                <span class="detail-label">Qty</span>
+                <span>{{ pos.quantity | number:'1.0-6' }}</span>
+              </div>
+              <div class="pos-detail">
+                <span class="detail-label">Avg Buy</span>
+                <span>${{ pos.avgBuyPrice | number:'1.2-2' }}</span>
+              </div>
+              <div class="pos-detail">
+                <span class="detail-label">Current</span>
+                <span>${{ getCurrentPrice(pos.coinId) | number:'1.2-2' }}</span>
+              </div>
+              <div class="pos-detail">
+                <span class="detail-label">Value</span>
+                <span>${{ getPositionValue(pos) | number:'1.2-2' }}</span>
+              </div>
+            </div>
+
+            <div class="pos-footer">
+              <div class="change-24h" [class.green]="getChange24h(pos.coinId) >= 0" [class.red]="getChange24h(pos.coinId) < 0">
+                24h: {{ getChange24h(pos.coinId) >= 0 ? '▲' : '▼' }} {{ getChange24h(pos.coinId) | number:'1.2-2' }}%
+              </div>
+              <button class="btn-danger-sm" (click)="removePosition(pos._id)">Remove</button>
+            </div>
           </div>
         }
       </div>

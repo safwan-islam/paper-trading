@@ -26,7 +26,9 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
   readonly positions = signal<Position[]>([]);
   readonly prices = signal<CoinPrice[]>([]);
   readonly isLoading = signal(true);
+  readonly isReloading = signal(false);
   readonly pageError = signal('');
+  readonly sparklines = signal<Record<string, string>>({});
 
   private pollInterval: any;
 
@@ -63,8 +65,23 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
       next: ({ me, portfolio }) => {
         this.authService.setCurrentUser(me.data.user);
         this.positions.set(portfolio.data.positions);
+        this.loadSparklines(portfolio.data.positions);
       },
       error: (err) => this.pageError.set(err.error?.message ?? 'Failed to load dashboard.')
+    });
+  }
+
+  reloadBalance(): void {
+    this.isReloading.set(true);
+    forkJoin({
+      me: this.authService.fetchMe(),
+      portfolio: this.portfolioService.getPortfolio()
+    }).pipe(finalize(() => this.isReloading.set(false))).subscribe({
+      next: ({ me, portfolio }) => {
+        this.authService.setCurrentUser(me.data.user);
+        this.positions.set(portfolio.data.positions);
+      },
+      error: (err) => this.pageError.set(err.error?.message ?? 'Failed to reload.')
     });
   }
 
@@ -74,9 +91,7 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
     this.http.get<any>(url).subscribe({
       next: (data) => {
         const prices: CoinPrice[] = this.COINS.map(coin => ({
-          id: coin.id,
-          symbol: coin.symbol,
-          name: coin.name,
+          id: coin.id, symbol: coin.symbol, name: coin.name,
           price: data[coin.id]?.usd ?? 0,
           change24h: data[coin.id]?.usd_24h_change ?? 0,
         }));
@@ -85,8 +100,38 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
     });
   }
 
+  loadSparklines(positions: Position[]): void {
+    positions.forEach(pos => {
+      const url = `https://api.coingecko.com/api/v3/coins/${pos.coinId}/market_chart?vs_currency=usd&days=7&interval=daily`;
+      this.http.get<any>(url).subscribe({
+        next: (data) => {
+          const raw: [number, number][] = data.prices ?? [];
+          const pts = raw.map(p => p[1]);
+          if (pts.length < 2) return;
+          const min = Math.min(...pts);
+          const max = Math.max(...pts);
+          const w = 120, h = 40;
+          const points = pts.map((p, i) => {
+            const x = (i / (pts.length - 1)) * w;
+            const y = h - ((p - min) / (max - min || 1)) * h;
+            return `${x},${y}`;
+          }).join(' ');
+          this.sparklines.update(s => ({ ...s, [pos.coinId]: points }));
+        }
+      });
+    });
+  }
+
+  isSparklinePositive(coinId: string): boolean {
+    return true; // simplified
+  }
+
   getCurrentPrice(coinId: string): number {
     return this.prices().find(p => p.id === coinId)?.price ?? 0;
+  }
+
+  getChange24h(coinId: string): number {
+    return this.prices().find(p => p.id === coinId)?.change24h ?? 0;
   }
 
   getPositionValue(pos: Position): number {
@@ -97,18 +142,21 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
     return this.getPositionValue(pos) - (pos.avgBuyPrice * pos.quantity);
   }
 
+  getPositionPnlPct(pos: Position): number {
+    const cost = pos.avgBuyPrice * pos.quantity;
+    if (cost === 0) return 0;
+    return (this.getPositionPnl(pos) / cost) * 100;
+  }
+
   getTotalPortfolioValue(): number {
     return this.positions().reduce((sum, p) => sum + this.getPositionValue(p), 0);
   }
 
   getTotalPnl(): number {
-    const cash = this.currentUser()?.balance ?? 0;
-    return cash + this.getTotalPortfolioValue() - 10000;
+    return (this.currentUser()?.balance ?? 0) + this.getTotalPortfolioValue() - 10000;
   }
 
-  goToMarket(): void {
-    this.router.navigateByUrl('/market');
-  }
+  goToMarket(): void { this.router.navigateByUrl('/market'); }
 
   removePosition(id: string): void {
     this.portfolioService.deletePosition(id).subscribe({

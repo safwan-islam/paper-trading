@@ -2,7 +2,7 @@
   <div class="page-header">
     <div>
       <h1>Market</h1>
-      <p class="subtitle">Live crypto prices — updates every 10 seconds</p>
+      <p class="subtitle">Live crypto prices — updates every 15 seconds</p>
     </div>
     <div class="balance-badge">
       Balance: <strong>${{ (currentUser()?.balance ?? 0) | number:'1.2-2' }}</strong>
@@ -14,18 +14,18 @@
   } @else {
     <div class="coins-grid">
       @for (coin of localPrices(); track coin.id) {
-        <div class="coin-card">
+        <div class="coin-card" (click)="openTrade(coin, 'buy')">
           <div class="coin-info">
             <div class="coin-symbol">{{ coin.symbol }}</div>
             <div class="coin-name">{{ coin.name }}</div>
           </div>
           <div class="coin-price">
-            <div class="price">${{ coin.price | number:'1.2-8' }}</div>
+            <div class="price">${{ coin.price | number:'1.2-2' }}</div>
             <div class="change" [class.green]="coin.change24h >= 0" [class.red]="coin.change24h < 0">
               {{ coin.change24h >= 0 ? '▲' : '▼' }} {{ coin.change24h | number:'1.2-2' }}%
             </div>
           </div>
-          <div class="coin-actions">
+          <div class="coin-actions" (click)="$event.stopPropagation()">
             <button class="btn-buy" (click)="openTrade(coin, 'buy')">Buy</button>
             <button class="btn-sell" (click)="openTrade(coin, 'sell')">Sell</button>
           </div>
@@ -39,20 +39,61 @@
   <div class="modal-overlay" (click)="closeTrade()">
     <div class="modal" (click)="$event.stopPropagation()">
       <div class="modal-header">
-        <h2>{{ tradeType() === 'buy' ? 'Buy' : 'Sell' }} {{ selectedCoin()!.symbol }}</h2>
+        <div>
+          <h2>{{ selectedCoin()!.symbol }} <span class="coin-name-sm">{{ selectedCoin()!.name }}</span></h2>
+          <div class="modal-live-price">${{ selectedCoin()!.price | number:'1.2-2' }}
+            <span [class.green]="selectedCoin()!.change24h >= 0" [class.red]="selectedCoin()!.change24h < 0">
+              {{ selectedCoin()!.change24h >= 0 ? '▲' : '' }}{{ selectedCoin()!.change24h | number:'1.2-2' }}%
+            </span>
+          </div>
+        </div>
         <button class="close-btn" (click)="closeTrade()">✕</button>
       </div>
 
-      <div class="modal-price">
-        Current Price: <strong>${{ selectedCoin()!.price | number:'1.2-8' }}</strong>
+      <!-- 7-Day Chart -->
+      <div class="chart-container">
+        @if (isLoadingChart()) {
+          <div class="chart-loading">Loading chart...</div>
+        } @else if (chartPoints()) {
+          <div class="chart-header">
+            <span class="chart-label">7-Day Price</span>
+            <span [class.green]="isChartPositive()" [class.red]="!isChartPositive()">
+              {{ isChartPositive() ? '▲' : '▼' }}
+              {{ chartMin() | number:'1.2-2' }} → {{ chartMax() | number:'1.2-2' }}
+            </span>
+          </div>
+          <svg viewBox="0 0 500 160" class="chart-svg" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" [attr.stop-color]="isChartPositive() ? '#00d4aa' : '#ff4757'" stop-opacity="0.3"/>
+                <stop offset="100%" [attr.stop-color]="isChartPositive() ? '#00d4aa' : '#ff4757'" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polyline
+              [attr.points]="chartPoints()"
+              fill="none"
+              [attr.stroke]="isChartPositive() ? '#00d4aa' : '#ff4757'"
+              stroke-width="2"
+              stroke-linejoin="round"/>
+          </svg>
+          <div class="chart-dates">
+            @for (label of chartLabels(); track $index) {
+              @if ($index === 0 || $index === chartLabels().length - 1 || $index === 3) {
+                <span>{{ label }}</span>
+              }
+            }
+          </div>
+        }
       </div>
 
-      @if (tradeError()) {
-        <p class="error">{{ tradeError() }}</p>
-      }
-      @if (tradeSuccess()) {
-        <p class="success">{{ tradeSuccess() }}</p>
-      }
+      <!-- Trade form -->
+      <div class="trade-tabs">
+        <button [class.active-buy]="tradeType() === 'buy'" (click)="tradeType.set('buy')">Buy</button>
+        <button [class.active-sell]="tradeType() === 'sell'" (click)="tradeType.set('sell')">Sell</button>
+      </div>
+
+      @if (tradeError()) { <p class="error">{{ tradeError() }}</p> }
+      @if (tradeSuccess()) { <p class="success">{{ tradeSuccess() }}</p> }
 
       <label>
         <span>Quantity ({{ selectedCoin()!.symbol }})</span>
