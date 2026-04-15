@@ -1,11 +1,14 @@
-import { Component, computed, inject, signal, OnInit, OnDestroy } from '@angular/core';
+import {
+  Component, computed, inject, signal, OnInit, OnDestroy,
+  ElementRef, ViewChild, AfterViewInit, ChangeDetectorRef
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../core/auth.service';
 import { TradeService } from '../../core/trade.service';
 import { CoinPrice } from '../../core/models';
-import { environment } from '../../../environments/environment';
+import { createChart, CandlestickSeries, ColorType } from 'lightweight-charts';
 
 @Component({
   selector: 'app-market-page',
@@ -14,10 +17,13 @@ import { environment } from '../../../environments/environment';
   templateUrl: './market-page.component.html',
   styleUrl: './market-page.component.css'
 })
-export class MarketPageComponent implements OnInit, OnDestroy {
+export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
+  @ViewChild('chartContainer') chartContainer!: ElementRef;
+
   private readonly authService = inject(AuthService);
   private readonly tradeService = inject(TradeService);
   private readonly http = inject(HttpClient);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   readonly currentUser = computed(() => this.authService.currentUser());
   readonly localPrices = signal<CoinPrice[]>([]);
@@ -28,13 +34,12 @@ export class MarketPageComponent implements OnInit, OnDestroy {
   readonly tradeError = signal('');
   readonly tradeSuccess = signal('');
   readonly isLoadingPrices = signal(true);
-  readonly chartPoints = signal<string>('');
-  readonly chartLabels = signal<string[]>([]);
-  readonly chartMin = signal(0);
-  readonly chartMax = signal(0);
   readonly isLoadingChart = signal(false);
-  readonly chartPrices = signal<number[]>([]);
+  readonly activeTimeframe = signal('7');
+  readonly searchQuery = signal('');
 
+  private chart: any = null;
+  private candleSeries: any = null;
   private pollInterval: any;
 
   readonly COINS = [
@@ -48,13 +53,34 @@ export class MarketPageComponent implements OnInit, OnDestroy {
     { id: 'avalanche-2', symbol: 'AVAX', name: 'Avalanche' },
   ];
 
+  readonly TIMEFRAMES = [
+    { label: '1D', days: '1' },
+    { label: '7D', days: '7' },
+    { label: '1M', days: '30' },
+    { label: '3M', days: '90' },
+  ];
+
+  readonly filteredPrices = computed(() => {
+    const q = this.searchQuery().toLowerCase();
+    return this.localPrices().filter(c =>
+      c.symbol.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+    );
+  });
+
   ngOnInit(): void {
     this.fetchPrices();
     this.pollInterval = setInterval(() => this.fetchPrices(), 15000);
   }
 
+  ngAfterViewInit(): void {
+    if (this.selectedCoin()) {
+      setTimeout(() => this.initChart(), 100);
+    }
+  }
+
   ngOnDestroy(): void {
     if (this.pollInterval) clearInterval(this.pollInterval);
+    this.destroyChart();
   }
 
   fetchPrices(): void {
@@ -69,49 +95,93 @@ export class MarketPageComponent implements OnInit, OnDestroy {
         }));
         this.localPrices.set(prices);
         this.isLoadingPrices.set(false);
+        const sel = this.selectedCoin();
+        if (sel) {
+          const updated = prices.find(p => p.id === sel.id);
+          if (updated) this.selectedCoin.set(updated);
+        }
       },
       error: () => this.isLoadingPrices.set(false)
     });
   }
 
-  fetchChart(coinId: string): void {
+  selectCoin(coin: CoinPrice): void {
+    this.selectedCoin.set(coin);
+    this.tradeError.set('');
+    this.tradeSuccess.set('');
+    this.quantity.set(0);
+    this.destroyChart();
+    this.cdr.detectChanges();
+    setTimeout(() => {
+      this.initChart();
+      this.loadCandlestickData(coin.id, this.activeTimeframe());
+    }, 100);
+  }
+
+  setTimeframe(days: string): void {
+    this.activeTimeframe.set(days);
+    const coin = this.selectedCoin();
+    if (coin) this.loadCandlestickData(coin.id, days);
+  }
+
+  initChart(): void {
+    if (!this.chartContainer?.nativeElement) return;
+    this.destroyChart();
+
+    this.chart = createChart(this.chartContainer.nativeElement, {
+      layout: {
+        background: { type: ColorType.Solid, color: '#080c18' },
+        textColor: '#64748b',
+      },
+      grid: {
+        vertLines: { color: '#1a2540' },
+        horzLines: { color: '#1a2540' },
+      },
+      crosshair: { mode: 1 },
+      rightPriceScale: { borderColor: '#1a2540' },
+      timeScale: { borderColor: '#1a2540', timeVisible: true },
+      width: this.chartContainer.nativeElement.clientWidth,
+      height: 380,
+    });
+
+    this.candleSeries = this.chart.addSeries(CandlestickSeries, {
+      upColor: '#00d4aa',
+      downColor: '#ff4757',
+      borderUpColor: '#00d4aa',
+      borderDownColor: '#ff4757',
+      wickUpColor: '#00d4aa',
+      wickDownColor: '#ff4757',
+    });
+  }
+
+  loadCandlestickData(coinId: string, days: string): void {
+    if (!this.candleSeries) return;
     this.isLoadingChart.set(true);
-    this.chartPoints.set('');
-    const url = `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=7&interval=daily`;
+
+    const url = `https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=${days}`;
     this.http.get<any>(url).subscribe({
       next: (data) => {
-        const raw: [number, number][] = data.prices ?? [];
-        const prices = raw.map(p => p[1]);
-        const labels = raw.map(p => new Date(p[0]).toLocaleDateString('en', { month: 'short', day: 'numeric' }));
-        this.chartPrices.set(prices);
-        this.chartLabels.set(labels);
-        const min = Math.min(...prices);
-        const max = Math.max(...prices);
-        this.chartMin.set(min);
-        this.chartMax.set(max);
-        const w = 500, h = 160, pad = 10;
-        const points = prices.map((p, i) => {
-          const x = pad + (i / (prices.length - 1)) * (w - pad * 2);
-          const y = h - pad - ((p - min) / (max - min || 1)) * (h - pad * 2);
-          return `${x},${y}`;
-        }).join(' ');
-        this.chartPoints.set(points);
+        const candles = data.map((d: number[]) => ({
+          time: Math.floor(d[0] / 1000) as any,
+          open: d[1], high: d[2], low: d[3], close: d[4],
+        }));
+        if (this.candleSeries && candles.length > 0) {
+          this.candleSeries.setData(candles);
+          this.chart?.timeScale().fitContent();
+        }
         this.isLoadingChart.set(false);
       },
       error: () => this.isLoadingChart.set(false)
     });
   }
 
-  openTrade(coin: CoinPrice, type: 'buy' | 'sell'): void {
-    this.selectedCoin.set(coin);
-    this.tradeType.set(type);
-    this.quantity.set(0);
-    this.tradeError.set('');
-    this.tradeSuccess.set('');
-    this.fetchChart(coin.id);
+  destroyChart(): void {
+    if (this.chart) {
+      this.chart.remove();
+      this.chart = null;
+      this.candleSeries = null;
+    }
   }
-
-  closeTrade(): void { this.selectedCoin.set(null); }
 
   getTotal(): number {
     const coin = this.selectedCoin();
@@ -119,10 +189,16 @@ export class MarketPageComponent implements OnInit, OnDestroy {
     return parseFloat((this.quantity() * coin.price).toFixed(2));
   }
 
-  isChartPositive(): boolean {
-    const p = this.chartPrices();
-    if (p.length < 2) return true;
-    return p[p.length - 1] >= p[0];
+  getMaxQty(): number {
+    const coin = this.selectedCoin();
+    const balance = this.currentUser()?.balance ?? 0;
+    if (!coin || coin.price === 0) return 0;
+    return parseFloat((balance / coin.price).toFixed(6));
+  }
+
+  setQuickAmount(pct: number): void {
+    const max = this.getMaxQty();
+    this.quantity.set(parseFloat((max * pct).toFixed(6)));
   }
 
   submitTrade(): void {
@@ -139,9 +215,10 @@ export class MarketPageComponent implements OnInit, OnDestroy {
     }).subscribe({
       next: (response) => {
         this.authService.updateBalance(response.data.newBalance);
-        this.tradeSuccess.set(`${this.tradeType() === 'buy' ? 'Bought' : 'Sold'} ${this.quantity()} ${coin.symbol}!`);
+        this.tradeSuccess.set(`✅ ${this.tradeType() === 'buy' ? 'Bought' : 'Sold'} ${this.quantity()} ${coin.symbol} at $${coin.price.toLocaleString()}`);
         this.isSubmitting.set(false);
-        setTimeout(() => this.closeTrade(), 1500);
+        this.quantity.set(0);
+        setTimeout(() => this.tradeSuccess.set(''), 4000);
       },
       error: (err) => {
         this.tradeError.set(err.error?.message ?? 'Trade failed.');
