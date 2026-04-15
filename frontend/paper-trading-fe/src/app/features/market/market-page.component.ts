@@ -155,20 +155,27 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   loadCandlestickData(coinId: string, days: string): void {
-    if (!this.candleSeries) return;
+    if (!this.chart) return;
     this.isLoadingChart.set(true);
-
-    const url = `https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=${days}`;
+  
+    const url = `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`;
     this.http.get<any>(url).subscribe({
       next: (data) => {
-        const candles = data.map((d: number[]) => ({
-          time: Math.floor(d[0] / 1000) as any,
-          open: d[1], high: d[2], low: d[3], close: d[4],
-        }));
-        if (this.candleSeries && candles.length > 0) {
-          this.candleSeries.setData(candles);
-          this.chart?.timeScale().fitContent();
+        const prices: [number, number][] = data.prices ?? [];
+        if (this.candleSeries) {
+          this.chart.removeSeries(this.candleSeries);
         }
+        const { LineSeries } = require('lightweight-charts');
+        this.candleSeries = this.chart.addSeries(LineSeries, {
+          color: '#00d4aa',
+          lineWidth: 2,
+        });
+        const lineData = prices.map(([time, value]) => ({
+          time: Math.floor(time / 1000) as any,
+          value,
+        }));
+        this.candleSeries.setData(lineData);
+        this.chart?.timeScale().fitContent();
         this.isLoadingChart.set(false);
       },
       error: () => this.isLoadingChart.set(false)
