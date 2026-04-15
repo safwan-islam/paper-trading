@@ -158,18 +158,20 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
     if (!this.chart) return;
     this.isLoadingChart.set(true);
   
+    if (this.candleSeries) {
+      this.chart.removeSeries(this.candleSeries);
+      this.candleSeries = null;
+    }
+  
+    this.candleSeries = this.chart.addSeries(LineSeries, {
+      color: '#00d4aa',
+      lineWidth: 2,
+    });
+  
     const url = `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`;
     this.http.get<any>(url).subscribe({
       next: (data) => {
         const prices: [number, number][] = data.prices ?? [];
-        if (this.candleSeries) {
-          this.chart.removeSeries(this.candleSeries);
-        }
-        const { LineSeries } = require('lightweight-charts');
-        this.candleSeries = this.chart.addSeries(LineSeries, {
-          color: '#00d4aa',
-          lineWidth: 2,
-        });
         const lineData = prices.map(([time, value]) => ({
           time: Math.floor(time / 1000) as any,
           value,
