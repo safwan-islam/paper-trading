@@ -1,12 +1,12 @@
-import { Component, computed, inject, signal, DestroyRef } from '@angular/core';
+import { Component, computed, inject, signal, DestroyRef, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import { AuthService } from '../../core/auth.service';
 import { PortfolioService } from '../../core/portfolio.service';
-import { RealtimeService } from '../../core/realtime.service';
-import { Position } from '../../core/models';
+import { Position, CoinPrice } from '../../core/models';
 
 @Component({
   selector: 'app-dashboard-page',
@@ -15,22 +15,43 @@ import { Position } from '../../core/models';
   templateUrl: './dashboard-page.component.html',
   styleUrl: './dashboard-page.component.css'
 })
-export class DashboardPageComponent {
+export class DashboardPageComponent implements OnInit, OnDestroy {
   private readonly authService = inject(AuthService);
   private readonly portfolioService = inject(PortfolioService);
-  private readonly realtimeService = inject(RealtimeService);
   private readonly router = inject(Router);
+  private readonly http = inject(HttpClient);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly currentUser = computed(() => this.authService.currentUser());
-  readonly prices = computed(() => this.realtimeService.prices());
   readonly positions = signal<Position[]>([]);
+  readonly prices = signal<CoinPrice[]>([]);
   readonly isLoading = signal(true);
   readonly pageError = signal('');
 
-  constructor() {
+  private pollInterval: any;
+
+  readonly COINS = [
+    { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin' },
+    { id: 'ethereum', symbol: 'ETH', name: 'Ethereum' },
+    { id: 'solana', symbol: 'SOL', name: 'Solana' },
+    { id: 'binancecoin', symbol: 'BNB', name: 'BNB' },
+    { id: 'cardano', symbol: 'ADA', name: 'Cardano' },
+    { id: 'dogecoin', symbol: 'DOGE', name: 'Dogecoin' },
+    { id: 'ripple', symbol: 'XRP', name: 'XRP' },
+    { id: 'avalanche-2', symbol: 'AVAX', name: 'Avalanche' },
+  ];
+
+  ngOnInit(): void {
     this.loadDashboard();
-    this.destroyRef.onDestroy(() => {});
+    this.fetchPrices();
+    this.pollInterval = setInterval(() => this.fetchPrices(), 15000);
+    this.destroyRef.onDestroy(() => {
+      if (this.pollInterval) clearInterval(this.pollInterval);
+    });
+  }
+
+  ngOnDestroy(): void {
+    if (this.pollInterval) clearInterval(this.pollInterval);
   }
 
   loadDashboard(): void {
@@ -44,6 +65,23 @@ export class DashboardPageComponent {
         this.positions.set(portfolio.data.positions);
       },
       error: (err) => this.pageError.set(err.error?.message ?? 'Failed to load dashboard.')
+    });
+  }
+
+  fetchPrices(): void {
+    const ids = this.COINS.map(c => c.id).join(',');
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
+    this.http.get<any>(url).subscribe({
+      next: (data) => {
+        const prices: CoinPrice[] = this.COINS.map(coin => ({
+          id: coin.id,
+          symbol: coin.symbol,
+          name: coin.name,
+          price: data[coin.id]?.usd ?? 0,
+          change24h: data[coin.id]?.usd_24h_change ?? 0,
+        }));
+        this.prices.set(prices);
+      }
     });
   }
 
