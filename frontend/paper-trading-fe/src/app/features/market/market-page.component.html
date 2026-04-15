@@ -9,11 +9,11 @@
     </div>
   </div>
 
-  @if (prices().length === 0) {
+  @if (isLoadingPrices()) {
     <div class="loading">Connecting to live prices...</div>
   } @else {
     <div class="coins-grid">
-      @for (coin of prices(); track coin.id) {
+      @for (coin of localPrices(); track coin.id) {
         <div class="coin-card">
           <div class="coin-info">
             <div class="coin-symbol">{{ coin.symbol }}</div>
