@@ -8,7 +8,7 @@ import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../core/auth.service';
 import { TradeService } from '../../core/trade.service';
 import { CoinPrice } from '../../core/models';
-import { createChart, CandlestickSeries, ColorType } from 'lightweight-charts';
+import { createChart, LineSeries, ColorType } from 'lightweight-charts';
 
 @Component({
   selector: 'app-market-page',
