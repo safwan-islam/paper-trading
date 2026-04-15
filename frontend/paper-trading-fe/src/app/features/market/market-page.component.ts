@@ -114,14 +114,14 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
     this.cdr.detectChanges();
     setTimeout(() => {
       this.initChart();
-      this.loadCandlestickData(coin.id, this.activeTimeframe());
+      this.loadChartData(coin.id, this.activeTimeframe());
     }, 100);
   }
 
   setTimeframe(days: string): void {
     this.activeTimeframe.set(days);
     const coin = this.selectedCoin();
-    if (coin) this.loadCandlestickData(coin.id, days);
+    if (coin) this.loadChartData(coin.id, days);
   }
 
   initChart(): void {
@@ -143,31 +143,22 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
       width: this.chartContainer.nativeElement.clientWidth,
       height: 380,
     });
-
-    this.candleSeries = this.chart.addSeries(CandlestickSeries, {
-      upColor: '#00d4aa',
-      downColor: '#ff4757',
-      borderUpColor: '#00d4aa',
-      borderDownColor: '#ff4757',
-      wickUpColor: '#00d4aa',
-      wickDownColor: '#ff4757',
-    });
   }
 
-  loadCandlestickData(coinId: string, days: string): void {
+  loadChartData(coinId: string, days: string): void {
     if (!this.chart) return;
     this.isLoadingChart.set(true);
-  
+
     if (this.candleSeries) {
       this.chart.removeSeries(this.candleSeries);
       this.candleSeries = null;
     }
-  
+
     this.candleSeries = this.chart.addSeries(LineSeries, {
       color: '#00d4aa',
       lineWidth: 2,
     });
-  
+
     const url = `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`;
     this.http.get<any>(url).subscribe({
       next: (data) => {
