@@ -1,7 +1,8 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TradeService } from '../../core/trade.service';
+import { RealtimeService } from '../../core/realtime.service';
 import { Trade } from '../../core/models';
 
 @Component({
@@ -11,52 +12,60 @@ import { Trade } from '../../core/models';
   templateUrl: './history-page.component.html',
   styleUrl: './history-page.component.css'
 })
-export class HistoryPageComponent {
-  private readonly tradeService = inject(TradeService);
+export class HistoryPageComponent implements OnInit {
+  trades: Trade[] = [];
+  isLoading: boolean = true;
+  pageError: string = '';
+  editingId: string | null = null;
+  editNote: string = '';
 
-  readonly trades = signal<Trade[]>([]);
-  readonly isLoading = signal(true);
-  readonly pageError = signal('');
-  readonly editingId = signal<string | null>(null);
-  readonly editNote = signal('');
+  constructor(
+    private readonly tradeService: TradeService,
+    private readonly realtimeService: RealtimeService
+  ) {}
 
-  constructor() {
+  ngOnInit(): void {
     this.loadTrades();
+
+    // WebSocket: auto-refresh when a trade is executed
+    this.realtimeService.onPortfolioUpdatedCallback(() => {
+      this.loadTrades();
+    });
   }
 
   loadTrades(): void {
-    this.isLoading.set(true);
+    this.isLoading = true;
     this.tradeService.getTrades().subscribe({
       next: (response) => {
-        this.trades.set(response.data.trades);
-        this.isLoading.set(false);
+        this.trades = response.data.trades;
+        this.isLoading = false;
       },
       error: (err) => {
-        this.pageError.set(err.error?.message ?? 'Failed to load trade history.');
-        this.isLoading.set(false);
+        this.pageError = err.error?.message ?? 'Failed to load history.';
+        this.isLoading = false;
       }
     });
   }
 
   startEdit(trade: Trade): void {
-    this.editingId.set(trade._id);
-    this.editNote.set(trade.note ?? '');
+    this.editingId = trade._id;
+    this.editNote = trade.note ?? '';
   }
 
   saveNote(id: string): void {
-    this.tradeService.updateTrade(id, this.editNote()).subscribe({
+    this.tradeService.updateTrade(id, this.editNote).subscribe({
       next: (response) => {
-        this.trades.set(this.trades().map(t => t._id === id ? response.data.trade : t));
-        this.editingId.set(null);
+        this.trades = this.trades.map(t => t._id === id ? response.data.trade : t);
+        this.editingId = null;
       },
-      error: (err) => this.pageError.set(err.error?.message ?? 'Failed to update note.')
+      error: (err) => { this.pageError = err.error?.message ?? 'Failed to update.'; }
     });
   }
 
   deleteTrade(id: string): void {
     this.tradeService.deleteTrade(id).subscribe({
-      next: () => this.trades.set(this.trades().filter(t => t._id !== id)),
-      error: (err) => this.pageError.set(err.error?.message ?? 'Failed to delete trade.')
+      next: () => { this.trades = this.trades.filter(t => t._id !== id); },
+      error: (err) => { this.pageError = err.error?.message ?? 'Failed to delete.'; }
     });
   }
 }

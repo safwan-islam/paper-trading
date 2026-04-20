@@ -18,6 +18,7 @@ const COINS = [
 ];
 
 let cachedPrices = [];
+let realPrices = []; // Store real Kraken prices separately
 
 const fetchFromKraken = (path) => {
     return new Promise((resolve, reject) => {
@@ -52,6 +53,7 @@ const fetchPrices = async () => {
         };
     });
     cachedPrices = prices;
+    realPrices = prices;
     return prices;
 };
 
@@ -80,14 +82,16 @@ const checkPriceAlerts = (newPrices) => {
         const prev = previousPrices[coin.id];
         if (!prev || prev === 0 || coin.price === 0) return;
         const changePct = ((coin.price - prev) / prev) * 100;
-        if (Math.abs(changePct) >= 0.2) {
+        if (Math.abs(changePct) >= 0.05) {
             const dir = changePct > 0 ? "🚀" : "📉";
             io.emit("price:alert", {
-                coinId: coin.id, symbol: coin.symbol,
-                message: `${dir} ${coin.symbol} ${changePct > 0 ? '+' : ''}${changePct.toFixed(2)}% — $${coin.price.toLocaleString()}`,
+                coinId: coin.id,
+                symbol: coin.symbol,
+                message: `${dir} ${coin.symbol} ${changePct > 0 ? '+' : ''}${changePct.toFixed(3)}% — $${coin.price.toLocaleString()}`,
             });
         }
     });
+    // Update previous prices with real Kraken prices only
     newPrices.forEach(c => { previousPrices[c.id] = c.price; });
 };
 
@@ -113,8 +117,14 @@ const initializeSocket = (server) => {
     const pollPrices = async () => {
         try {
             const prices = await fetchPrices();
+
+            // Broadcast real prices
             io.emit("price:update", { prices });
+
+            // Check alerts only on real Kraken prices
             checkPriceAlerts(prices);
+
+            // Initialize previousPrices on first run
             if (Object.keys(previousPrices).length === 0) {
                 prices.forEach(c => { previousPrices[c.id] = c.price; });
             }
@@ -126,7 +136,8 @@ const initializeSocket = (server) => {
     pollPrices();
     priceInterval = setInterval(pollPrices, 15000);
 
-    // Simulate micro price movements every second between real updates
+    // Simulate micro price movements every second
+    // Does NOT update previousPrices — alerts only on real Kraken data
     setInterval(() => {
         if (!io || cachedPrices.length === 0) return;
         const simulated = cachedPrices.map(coin => ({
