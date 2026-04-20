@@ -5,79 +5,87 @@ let io;
 let priceInterval;
 
 const COINS = [
-    { id: "bitcoin", symbol: "BTC", name: "Bitcoin" },
-    { id: "ethereum", symbol: "ETH", name: "Ethereum" },
-    { id: "solana", symbol: "SOL", name: "Solana" },
-    { id: "binancecoin", symbol: "BNB", name: "BNB" },
-    { id: "cardano", symbol: "ADA", name: "Cardano" },
-    { id: "dogecoin", symbol: "DOGE", name: "Dogecoin" },
-    { id: "ripple", symbol: "XRP", name: "XRP" },
-    { id: "avalanche-2", symbol: "AVAX", name: "Avalanche" },
+    { id: "bitcoin",      symbol: "BTC",  name: "Bitcoin",   binance: "BTCUSDT" },
+    { id: "ethereum",     symbol: "ETH",  name: "Ethereum",  binance: "ETHUSDT" },
+    { id: "solana",       symbol: "SOL",  name: "Solana",    binance: "SOLUSDT" },
+    { id: "binancecoin",  symbol: "BNB",  name: "BNB",       binance: "BNBUSDT" },
+    { id: "cardano",      symbol: "ADA",  name: "Cardano",   binance: "ADAUSDT" },
+    { id: "dogecoin",     symbol: "DOGE", name: "Dogecoin",  binance: "DOGEUSDT" },
+    { id: "ripple",       symbol: "XRP",  name: "XRP",       binance: "XRPUSDT" },
+    { id: "avalanche-2",  symbol: "AVAX", name: "Avalanche", binance: "AVAXUSDT" },
 ];
 
 let cachedPrices = [];
 
-const fetchPrices = () => {
+const fetchFromBinance = (path) => {
     return new Promise((resolve, reject) => {
-        const ids = COINS.map((c) => c.id).join(",");
-        const url = `/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
-
         const options = {
-            hostname: "api.coingecko.com",
-            path: url,
+            hostname: "api.binance.com",
+            path,
             headers: { "User-Agent": "PaperTradingApp/1.0" },
         };
-
-        https
-            .get(options, (res) => {
-                let data = "";
-                res.on("data", (chunk) => (data += chunk));
-                res.on("end", () => {
-                    try {
-                        const json = JSON.parse(data);
-                        const prices = COINS.map((coin) => ({
-                            id: coin.id,
-                            symbol: coin.symbol,
-                            name: coin.name,
-                            price: json[coin.id]?.usd || 0,
-                            change24h: json[coin.id]?.usd_24h_change || 0,
-                        }));
-                        cachedPrices = prices;
-                        resolve(prices);
-                    } catch (e) {
-                        reject(e);
-                    }
-                });
-            })
-            .on("error", reject);
+        https.get(options, (res) => {
+            let data = "";
+            res.on("data", (chunk) => (data += chunk));
+            res.on("end", () => {
+                try { resolve(JSON.parse(data)); }
+                catch (e) { reject(e); }
+            });
+        }).on("error", reject);
     });
 };
 
-const initializeSocket = (server) => {
-    io = new Server(server, {
-        cors: { origin: "*" },
+const fetchPrices = async () => {
+    const symbols = JSON.stringify(COINS.map(c => c.binance));
+    const data = await fetchFromBinance(`/api/v3/ticker/24hr?symbols=${encodeURIComponent(symbols)}`);
+    const prices = COINS.map((coin) => {
+        const ticker = data.find(t => t.symbol === coin.binance);
+        return {
+            id: coin.id,
+            symbol: coin.symbol,
+            name: coin.name,
+            price: ticker ? parseFloat(ticker.lastPrice) : 0,
+            change24h: ticker ? parseFloat(ticker.priceChangePercent) : 0,
+        };
     });
+    cachedPrices = prices;
+    return prices;
+};
+
+const fetchChart = async (binanceSymbol, interval, limit) => {
+    const data = await fetchFromBinance(
+        `/api/v3/klines?symbol=${binanceSymbol}&interval=${interval}&limit=${limit}`
+    );
+    return data.map(d => ({
+        time: Math.floor(d[0] / 1000),
+        open: parseFloat(d[1]),
+        high: parseFloat(d[2]),
+        low: parseFloat(d[3]),
+        close: parseFloat(d[4]),
+    }));
+};
+
+const getBinanceSymbol = (coinId) => {
+    const coin = COINS.find(c => c.id === coinId);
+    return coin ? coin.binance : null;
+};
+
+const initializeSocket = (server) => {
+    io = new Server(server, { cors: { origin: "*" } });
 
     io.on("connection", (socket) => {
         console.log("Client connected:", socket.id);
-
-        // Send cached prices immediately on connect
         if (cachedPrices.length > 0) {
             socket.emit("price:update", { prices: cachedPrices });
         }
-
-        // Join personal room for trade notifications
         socket.on("join", (userId) => {
             socket.join(userId);
-            console.log(`User ${userId} joined their room`);
         });
-
         socket.on("disconnect", () => {
             console.log("Client disconnected:", socket.id);
         });
     });
 
-    // Poll CoinGecko every 10 seconds
     const pollPrices = async () => {
         try {
             const prices = await fetchPrices();
@@ -87,10 +95,7 @@ const initializeSocket = (server) => {
         }
     };
 
-    // Initial fetch
     pollPrices();
-
-    // Poll every 10 seconds
     priceInterval = setInterval(pollPrices, 10000);
 
     return io;
@@ -106,4 +111,4 @@ const emitTradeExecuted = (userId, trade) => {
 
 const getCachedPrices = () => cachedPrices;
 
-module.exports = { initializeSocket, emitTradeExecuted, getCachedPrices };
+module.exports = { initializeSocket, emitTradeExecuted, getCachedPrices, fetchChart, getBinanceSymbol };
