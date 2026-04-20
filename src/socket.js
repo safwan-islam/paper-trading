@@ -5,22 +5,22 @@ let io;
 let priceInterval;
 
 const COINS = [
-    { id: "bitcoin",     symbol: "BTC",  name: "Bitcoin"   },
-    { id: "ethereum",    symbol: "ETH",  name: "Ethereum"  },
-    { id: "solana",      symbol: "SOL",  name: "Solana"    },
-    { id: "binancecoin", symbol: "BNB",  name: "BNB"       },
-    { id: "cardano",     symbol: "ADA",  name: "Cardano"   },
-    { id: "dogecoin",    symbol: "DOGE", name: "Dogecoin"  },
-    { id: "ripple",      symbol: "XRP",  name: "XRP"       },
-    { id: "avalanche-2", symbol: "AVAX", name: "Avalanche" },
+    { id: "bitcoin",     symbol: "BTC",  name: "Bitcoin",   kraken: "XBTUSD"  },
+    { id: "ethereum",    symbol: "ETH",  name: "Ethereum",  kraken: "ETHUSD"  },
+    { id: "solana",      symbol: "SOL",  name: "Solana",    kraken: "SOLUSD"  },
+    { id: "binancecoin", symbol: "BNB",  name: "BNB",       kraken: "BNBUSD"  },
+    { id: "cardano",     symbol: "ADA",  name: "Cardano",   kraken: "ADAUSD"  },
+    { id: "dogecoin",    symbol: "DOGE", name: "Dogecoin",  kraken: "DOGEUSD" },
+    { id: "ripple",      symbol: "XRP",  name: "XRP",       kraken: "XRPUSD"  },
+    { id: "avalanche-2", symbol: "AVAX", name: "Avalanche", kraken: "AVAXUSD" },
 ];
 
 let cachedPrices = [];
 
-const fetchFromCoinGecko = (path) => {
+const fetchFromKraken = (path) => {
     return new Promise((resolve, reject) => {
         const options = {
-            hostname: "api.coingecko.com",
+            hostname: "api.kraken.com",
             path,
             headers: { "User-Agent": "PaperTradingApp/1.0" },
         };
@@ -36,35 +36,59 @@ const fetchFromCoinGecko = (path) => {
 };
 
 const fetchPrices = async () => {
-    const ids = COINS.map(c => c.id).join(",");
-    const data = await fetchFromCoinGecko(
-        `/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`
-    );
-    const prices = COINS.map((coin) => ({
-        id: coin.id,
-        symbol: coin.symbol,
-        name: coin.name,
-        price: data[coin.id]?.usd || 0,
-        change24h: data[coin.id]?.usd_24h_change || 0,
-    }));
+    const pairs = COINS.map(c => c.kraken).join(",");
+    const data = await fetchFromKraken(`/0/public/Ticker?pair=${pairs}`);
+    
+    if (data.error && data.error.length > 0) {
+        throw new Error(data.error[0]);
+    }
+
+    const prices = COINS.map((coin) => {
+        const result = data.result;
+        const key = Object.keys(result || {}).find(k => 
+            k.includes(coin.kraken) || k.includes(coin.symbol)
+        );
+        const ticker = key ? result[key] : null;
+        return {
+            id: coin.id,
+            symbol: coin.symbol,
+            name: coin.name,
+            price: ticker ? parseFloat(ticker.c[0]) : 0,
+            change24h: ticker ? 
+                ((parseFloat(ticker.c[0]) - parseFloat(ticker.o)) / parseFloat(ticker.o)) * 100 : 0,
+        };
+    });
     cachedPrices = prices;
     return prices;
 };
 
 const fetchChart = async (coinId, days) => {
-    const data = await fetchFromCoinGecko(
-        `/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`
+    const coin = COINS.find(c => c.id === coinId);
+    if (!coin) throw new Error("Unknown coin");
+
+    let interval = 1440; // daily in minutes
+    if (days === "1") interval = 60;
+    if (days === "7") interval = 240;
+
+    const data = await fetchFromKraken(
+        `/0/public/OHLC?pair=${coin.kraken}&interval=${interval}`
     );
-    const prices = data.prices || [];
-    // Group into OHLC-like candles
-    const candles = prices.map(([time, value]) => ({
-        time: Math.floor(time / 1000),
-        open: value,
-        high: value,
-        low: value,
-        close: value,
+
+    if (data.error && data.error.length > 0) {
+        throw new Error(data.error[0]);
+    }
+
+    const result = data.result;
+    const key = Object.keys(result).find(k => k !== "last");
+    const ohlc = result[key] || [];
+
+    return ohlc.slice(-90).map(d => ({
+        time: d[0],
+        open: parseFloat(d[1]),
+        high: parseFloat(d[2]),
+        low: parseFloat(d[3]),
+        close: parseFloat(d[4]),
     }));
-    return candles;
 };
 
 const getCoinId = (coinId) => {
@@ -95,7 +119,7 @@ const initializeSocket = (server) => {
     };
 
     pollPrices();
-    priceInterval = setInterval(pollPrices, 30000);
+    priceInterval = setInterval(pollPrices, 15000);
     return io;
 };
 
