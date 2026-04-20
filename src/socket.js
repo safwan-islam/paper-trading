@@ -5,14 +5,14 @@ let io;
 let priceInterval;
 
 const COINS = [
-    { id: "bitcoin",     symbol: "BTC",  name: "Bitcoin",   kraken: "XBTUSD"  },
-    { id: "ethereum",    symbol: "ETH",  name: "Ethereum",  kraken: "ETHUSD"  },
-    { id: "solana",      symbol: "SOL",  name: "Solana",    kraken: "SOLUSD"  },
-    { id: "binancecoin", symbol: "BNB",  name: "BNB",       kraken: "BNBUSD"  },
-    { id: "cardano",     symbol: "ADA",  name: "Cardano",   kraken: "ADAUSD"  },
-    { id: "dogecoin",    symbol: "DOGE", name: "Dogecoin",  kraken: "DOGEUSD" },
-    { id: "ripple",      symbol: "XRP",  name: "XRP",       kraken: "XRPUSD"  },
-    { id: "avalanche-2", symbol: "AVAX", name: "Avalanche", kraken: "AVAXUSD" },
+    { id: "bitcoin",     symbol: "BTC",  name: "Bitcoin",   kraken: "XXBTZUSD" },
+    { id: "ethereum",    symbol: "ETH",  name: "Ethereum",  kraken: "XETHZUSD" },
+    { id: "solana",      symbol: "SOL",  name: "Solana",    kraken: "SOLUSD"   },
+    { id: "binancecoin", symbol: "BNB",  name: "BNB",       kraken: "BNBUSD"   },
+    { id: "cardano",     symbol: "ADA",  name: "Cardano",   kraken: "ADAUSD"   },
+    { id: "dogecoin",    symbol: "DOGE", name: "Dogecoin",  kraken: "XDGUSD"   },
+    { id: "ripple",      symbol: "XRP",  name: "XRP",       kraken: "XXRPZUSD" },
+    { id: "avalanche-2", symbol: "AVAX", name: "Avalanche", kraken: "AVAXUSD"  },
 ];
 
 let cachedPrices = [];
