@@ -5,22 +5,22 @@ let io;
 let priceInterval;
 
 const COINS = [
-    { id: "bitcoin",      symbol: "BTC",  name: "Bitcoin",   binance: "BTCUSDT" },
-    { id: "ethereum",     symbol: "ETH",  name: "Ethereum",  binance: "ETHUSDT" },
-    { id: "solana",       symbol: "SOL",  name: "Solana",    binance: "SOLUSDT" },
-    { id: "binancecoin",  symbol: "BNB",  name: "BNB",       binance: "BNBUSDT" },
-    { id: "cardano",      symbol: "ADA",  name: "Cardano",   binance: "ADAUSDT" },
-    { id: "dogecoin",     symbol: "DOGE", name: "Dogecoin",  binance: "DOGEUSDT" },
-    { id: "ripple",       symbol: "XRP",  name: "XRP",       binance: "XRPUSDT" },
-    { id: "avalanche-2",  symbol: "AVAX", name: "Avalanche", binance: "AVAXUSDT" },
+    { id: "bitcoin",     symbol: "BTC",  name: "Bitcoin"   },
+    { id: "ethereum",    symbol: "ETH",  name: "Ethereum"  },
+    { id: "solana",      symbol: "SOL",  name: "Solana"    },
+    { id: "binancecoin", symbol: "BNB",  name: "BNB"       },
+    { id: "cardano",     symbol: "ADA",  name: "Cardano"   },
+    { id: "dogecoin",    symbol: "DOGE", name: "Dogecoin"  },
+    { id: "ripple",      symbol: "XRP",  name: "XRP"       },
+    { id: "avalanche-2", symbol: "AVAX", name: "Avalanche" },
 ];
 
 let cachedPrices = [];
 
-const fetchFromBinance = (path) => {
+const fetchFromCoinGecko = (path) => {
     return new Promise((resolve, reject) => {
         const options = {
-            hostname: "api.binance.com",
+            hostname: "api.coingecko.com",
             path,
             headers: { "User-Agent": "PaperTradingApp/1.0" },
         };
@@ -36,38 +36,39 @@ const fetchFromBinance = (path) => {
 };
 
 const fetchPrices = async () => {
-    const symbols = JSON.stringify(COINS.map(c => c.binance));
-    const data = await fetchFromBinance(`/api/v3/ticker/24hr?symbols=${encodeURIComponent(symbols)}`);
-    const prices = COINS.map((coin) => {
-        const ticker = data.find(t => t.symbol === coin.binance);
-        return {
-            id: coin.id,
-            symbol: coin.symbol,
-            name: coin.name,
-            price: ticker ? parseFloat(ticker.lastPrice) : 0,
-            change24h: ticker ? parseFloat(ticker.priceChangePercent) : 0,
-        };
-    });
+    const ids = COINS.map(c => c.id).join(",");
+    const data = await fetchFromCoinGecko(
+        `/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`
+    );
+    const prices = COINS.map((coin) => ({
+        id: coin.id,
+        symbol: coin.symbol,
+        name: coin.name,
+        price: data[coin.id]?.usd || 0,
+        change24h: data[coin.id]?.usd_24h_change || 0,
+    }));
     cachedPrices = prices;
     return prices;
 };
 
-const fetchChart = async (binanceSymbol, interval, limit) => {
-    const data = await fetchFromBinance(
-        `/api/v3/klines?symbol=${binanceSymbol}&interval=${interval}&limit=${limit}`
+const fetchChart = async (coinId, days) => {
+    const data = await fetchFromCoinGecko(
+        `/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`
     );
-    return data.map(d => ({
-        time: Math.floor(d[0] / 1000),
-        open: parseFloat(d[1]),
-        high: parseFloat(d[2]),
-        low: parseFloat(d[3]),
-        close: parseFloat(d[4]),
+    const prices = data.prices || [];
+    // Group into OHLC-like candles
+    const candles = prices.map(([time, value]) => ({
+        time: Math.floor(time / 1000),
+        open: value,
+        high: value,
+        low: value,
+        close: value,
     }));
+    return candles;
 };
 
-const getBinanceSymbol = (coinId) => {
-    const coin = COINS.find(c => c.id === coinId);
-    return coin ? coin.binance : null;
+const getCoinId = (coinId) => {
+    return COINS.find(c => c.id === coinId) ? coinId : null;
 };
 
 const initializeSocket = (server) => {
@@ -78,9 +79,7 @@ const initializeSocket = (server) => {
         if (cachedPrices.length > 0) {
             socket.emit("price:update", { prices: cachedPrices });
         }
-        socket.on("join", (userId) => {
-            socket.join(userId);
-        });
+        socket.on("join", (userId) => { socket.join(userId); });
         socket.on("disconnect", () => {
             console.log("Client disconnected:", socket.id);
         });
@@ -96,8 +95,7 @@ const initializeSocket = (server) => {
     };
 
     pollPrices();
-    priceInterval = setInterval(pollPrices, 10000);
-
+    priceInterval = setInterval(pollPrices, 30000);
     return io;
 };
 
@@ -111,4 +109,4 @@ const emitTradeExecuted = (userId, trade) => {
 
 const getCachedPrices = () => cachedPrices;
 
-module.exports = { initializeSocket, emitTradeExecuted, getCachedPrices, fetchChart, getBinanceSymbol };
+module.exports = { initializeSocket, emitTradeExecuted, getCachedPrices, fetchChart, getCoinId };

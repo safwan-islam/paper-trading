@@ -21,21 +21,17 @@ app.get("/prices", (req, res) => {
 });
 
 app.get("/chart/:coinId", async (req, res) => {
-    const { fetchChart, getBinanceSymbol } = require("./socket");
+    const { fetchChart, getCoinId } = require("./socket");
     const { coinId } = req.params;
     const { days } = req.query;
-    const binanceSymbol = getBinanceSymbol(coinId);
-    if (!binanceSymbol) {
+
+    const validCoinId = getCoinId(coinId);
+    if (!validCoinId) {
         return res.status(400).json({ message: "Unknown coin." });
     }
-    let interval = "1d";
-    let limit = 30;
-    if (days === "1")  { interval = "1h";  limit = 24; }
-    if (days === "7")  { interval = "4h";  limit = 42; }
-    if (days === "30") { interval = "1d";  limit = 30; }
-    if (days === "90") { interval = "1d";  limit = 90; }
+
     try {
-        const candles = await fetchChart(binanceSymbol, interval, limit);
+        const candles = await fetchChart(coinId, days || "7");
         return res.status(200).json({ data: { candles } });
     } catch (error) {
         console.log("Chart fetch error:", error.message);
