@@ -23,5 +23,10 @@ export const routes: Routes = [
     loadComponent: () => import('./features/history/history-page.component').then(m => m.HistoryPageComponent),
     canActivate: [authGuard]
   },
+  {
+    path: 'wallet',
+    loadComponent: () => import('./features/wallet/wallet-page.component').then(m => m.WalletPageComponent),
+    canActivate: [authGuard]
+  },
   { path: '**', redirectTo: 'dashboard' }
 ];

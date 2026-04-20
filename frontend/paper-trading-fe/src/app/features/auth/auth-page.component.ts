@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -13,39 +13,42 @@ import { RealtimeService } from '../../core/realtime.service';
   styleUrl: './auth-page.component.css'
 })
 export class AuthPageComponent {
-  private readonly authService = inject(AuthService);
-  private readonly realtimeService = inject(RealtimeService);
-  private readonly router = inject(Router);
+  isLogin: boolean = true;
+  isLoading: boolean = false;
+  errorMessage: string = '';
+  name: string = '';
+  email: string = '';
+  password: string = '';
 
-  readonly isLogin = signal(true);
-  readonly isLoading = signal(false);
-  readonly errorMessage = signal('');
-
-  name = ''; email = ''; password = '';
+  constructor(
+    private readonly authService: AuthService,
+    private readonly realtimeService: RealtimeService,
+    private readonly router: Router
+  ) {}
 
   toggleMode(): void {
-    this.isLogin.set(!this.isLogin());
-    this.errorMessage.set('');
+    this.isLogin = !this.isLogin;
+    this.errorMessage = '';
   }
 
   submit(): void {
-    this.errorMessage.set('');
-    this.isLoading.set(true);
-    const request$ = this.isLogin()
+    this.errorMessage = '';
+    this.isLoading = true;
+
+    const request$ = this.isLogin
       ? this.authService.login(this.email, this.password)
       : this.authService.register(this.name, this.email, this.password);
 
     request$.subscribe({
       next: (response) => {
-        const data = response.data ?? response;
-        this.authService.setToken(data.token);
-        this.authService.setCurrentUser(data.user);
-        this.realtimeService.connect(data.user.id);
+        this.authService.setToken(response.data.token);
+        this.authService.setCurrentUser(response.data.user);
+        this.realtimeService.connect(response.data.user.id);
         this.router.navigateByUrl('/dashboard');
       },
       error: (error) => {
-        this.errorMessage.set(error.error?.message ?? 'Something went wrong.');
-        this.isLoading.set(false);
+        this.errorMessage = error.error?.message ?? 'Something went wrong.';
+        this.isLoading = false;
       }
     });
   }

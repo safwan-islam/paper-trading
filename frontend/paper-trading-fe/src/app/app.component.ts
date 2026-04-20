@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from './core/auth.service';
@@ -12,19 +12,38 @@ import { Router } from '@angular/router';
   templateUrl: './app.component.html',
   styleUrl: './app.component.css'
 })
-export class AppComponent {
-  private readonly authService = inject(AuthService);
-  private readonly realtimeService = inject(RealtimeService);
-  private readonly router = inject(Router);
+export class AppComponent implements OnInit {
+  liveTrade: string = '';
 
-  readonly currentUser = computed(() => this.authService.currentUser());
-  readonly tradeNotification = computed(() => this.realtimeService.lastTradeNotification());
+  get currentUser() { return this.authService.currentUser; }
 
-  constructor() {
-    const user = this.authService.currentUser();
-    if (user) {
-      this.realtimeService.connect(user.id);
-    }
+  get notification(): string {
+    return this.realtimeService.lastTradeNotification ||
+           this.realtimeService.lastFundsAdded ||
+           this.realtimeService.lastPriceAlert;
+  }
+
+  get notificationClass(): string {
+    if (this.realtimeService.lastPriceAlert) return 'toast-notification toast-alert';
+    if (this.realtimeService.lastFundsAdded) return 'toast-notification toast-funds';
+    return 'toast-notification toast-trade';
+  }
+
+  constructor(
+    private readonly authService: AuthService,
+    private readonly realtimeService: RealtimeService,
+    private readonly router: Router
+  ) {}
+
+  ngOnInit(): void {
+    const user = this.authService.currentUser;
+    if (user) this.realtimeService.connect(user.id);
+
+    // WebSocket: show global trade broadcast at bottom
+    this.realtimeService.onTradeBroadcastCallback((data) => {
+      this.liveTrade = data.message;
+      setTimeout(() => { this.liveTrade = ''; }, 4000);
+    });
   }
 
   logout(): void {

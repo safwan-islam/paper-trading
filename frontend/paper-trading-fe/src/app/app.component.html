@@ -1,25 +1,36 @@
-@if (tradeNotification()) {
-  <div class="toast-notification">
-    ✅ {{ tradeNotification() }}
+@if (notification) {
+  <div class="toast-notification" [class]="notificationClass">
+    {{ notification }}
   </div>
 }
 
-@if (currentUser()) {
+@if (liveTrade) {
+  <div class="live-ticker">
+    <span class="live-dot"></span>
+    {{ liveTrade }}
+  </div>
+}
+
+@if (currentUser) {
   <nav class="navbar">
-    <a class="brand" routerLink="/dashboard">📈 PaperTrade</a>
+    <a class="brand" routerLink="/dashboard">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+      PaperTrade
+    </a>
     <div class="nav-links">
       <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
       <a routerLink="/market" routerLinkActive="active">Market</a>
       <a routerLink="/history" routerLinkActive="active">History</a>
+      <a routerLink="/wallet" routerLinkActive="active">Wallet</a>
     </div>
     <div class="nav-right">
-      <span class="balance">${{ currentUser()!.balance.toFixed(2) }}</span>
-      <span class="username">{{ currentUser()!.name }}</span>
+      <span class="balance">${{ currentUser.balance | number:'1.2-2' }}</span>
+      <span class="username">{{ currentUser.name }}</span>
       <button (click)="logout()">Sign out</button>
     </div>
   </nav>
 }
 
-<main [class.with-nav]="currentUser()">
+<main [class.with-nav]="currentUser">
   <router-outlet />
 </main>

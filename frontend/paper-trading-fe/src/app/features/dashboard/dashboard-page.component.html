@@ -1,14 +1,18 @@
 <section class="page">
   <div class="page-header">
     <div>
-      <h1>Portfolio</h1>
-      <p class="subtitle">Your virtual trading portfolio</p>
+      <h1>Dashboard</h1>
+      <p class="subtitle">Your paper trading portfolio</p>
     </div>
     <div class="header-actions">
+      <div class="online-badge">
+        <span class="online-dot"></span>
+        {{ onlineCount }} online
+      </div>
       <button class="btn-reload" (click)="reloadBalance()" [disabled]="isReloading">
-        {{ isReloading ? '↻ Reloading...' : '↻ Reload' }}
+        {{ isReloading ? 'Refreshing...' : '↻ Refresh' }}
       </button>
-      <button class="btn-primary" (click)="goToMarket()">+ Trade</button>
+      <button class="btn-primary" (click)="goToMarket()">+ New Trade</button>
     </div>
   </div>
 
@@ -19,87 +23,96 @@
   } @else {
     <div class="stats-row">
       <div class="stat-card">
-        <span class="stat-label">Cash Balance</span>
-        <span class="stat-value">${{ (currentUser?.balance ?? 0) | number:'1.2-2' }}</span>
+        <div class="stat-label">Cash Balance</div>
+        <div class="stat-value">${{ (currentUser?.balance ?? 0) | number:'1.2-2' }}</div>
       </div>
       <div class="stat-card">
-        <span class="stat-label">Portfolio Value</span>
-        <span class="stat-value">${{ getTotalPortfolioValue() | number:'1.2-2' }}</span>
+        <div class="stat-label">Portfolio Value</div>
+        <div class="stat-value">${{ getTotalPortfolioValue() | number:'1.2-2' }}</div>
       </div>
-      <div class="stat-card">
-        <span class="stat-label">Total P&L</span>
-        <span class="stat-value" [class.green]="getTotalPnl() >= 0" [class.red]="getTotalPnl() < 0">
+      <div class="stat-card" [class.pnl-positive]="getTotalPnl() >= 0" [class.pnl-negative]="getTotalPnl() < 0">
+        <div class="stat-label">Unrealized P&L</div>
+        <div class="stat-value" [class.green]="getTotalPnl() >= 0" [class.red]="getTotalPnl() < 0">
           {{ getTotalPnl() >= 0 ? '+' : '' }}${{ getTotalPnl() | number:'1.2-2' }}
-        </span>
+        </div>
       </div>
       <div class="stat-card">
-        <span class="stat-label">Total Value</span>
-        <span class="stat-value">${{ ((currentUser?.balance ?? 0) + getTotalPortfolioValue()) | number:'1.2-2' }}</span>
+        <div class="stat-label">Total Value</div>
+        <div class="stat-value">${{ ((currentUser?.balance ?? 0) + getTotalPortfolioValue()) | number:'1.2-2' }}</div>
       </div>
     </div>
 
-    <div class="section-title">Open Positions</div>
+    <div class="section-header">
+      <span class="section-title">Open Positions ({{ positions.length }})</span>
+    </div>
 
     @if (positions.length === 0) {
       <div class="empty">
-        <p>No open positions. <span (click)="goToMarket()">Go to Market</span> to start trading!</p>
+        <p>No open positions. <span (click)="goToMarket()">Go to Market</span> to start trading.</p>
       </div>
     } @else {
-      <div class="positions-grid">
+      <div class="positions-table">
+        <div class="table-head">
+          <span>Asset</span>
+          <span>Quantity</span>
+          <span>Avg Entry</span>
+          <span>Mark Price</span>
+          <span>7D</span>
+          <span>PnL</span>
+          <span></span>
+        </div>
         @for (pos of positions; track pos._id) {
-          <div class="position-card">
-            <div class="pos-header">
-              <div class="pos-asset">
-                <strong>{{ pos.symbol }}</strong>
+          <div class="table-row">
+            <div class="asset-info">
+              <div class="asset-icon">{{ pos.symbol.slice(0,2) }}</div>
+              <div class="asset-name">
+                <strong>{{ pos.symbol }}/USD</strong>
                 <small>{{ pos.name }}</small>
               </div>
-              <div class="pos-pnl" [class.green]="getPositionPnl(pos) >= 0" [class.red]="getPositionPnl(pos) < 0">
-                {{ getPositionPnl(pos) >= 0 ? '+' : '' }}${{ getPositionPnl(pos) | number:'1.2-2' }}
-                <span class="pnl-pct">({{ getPositionPnlPct(pos) | number:'1.2-2' }}%)</span>
-              </div>
             </div>
-
-            @if (sparklines[pos.coinId]) {
-              <div class="sparkline-container">
-                <svg viewBox="0 0 120 40" class="sparkline" preserveAspectRatio="none">
+            <span class="mono">{{ pos.quantity | number:'1.0-6' }}</span>
+            <span class="mono">${{ pos.avgBuyPrice | number:'1.2-2' }}</span>
+            <span class="mono">${{ getCurrentPrice(pos.coinId) | number:'1.2-2' }}</span>
+            <span class="sparkline-wrap">
+              @if (sparklines[pos.coinId]) {
+                <svg viewBox="0 0 80 32" class="sparkline" preserveAspectRatio="none">
                   <polyline
                     [attr.points]="sparklines[pos.coinId]"
                     fill="none"
-                    [attr.stroke]="getPositionPnl(pos) >= 0 ? '#00d4aa' : '#ff4757'"
+                    [attr.stroke]="getPositionPnl(pos) >= 0 ? '#22c55e' : '#ef4444'"
                     stroke-width="1.5"
                     stroke-linejoin="round"/>
                 </svg>
-              </div>
-            }
-
-            <div class="pos-details">
-              <div class="pos-detail">
-                <span class="detail-label">Qty</span>
-                <span>{{ pos.quantity | number:'1.0-6' }}</span>
-              </div>
-              <div class="pos-detail">
-                <span class="detail-label">Avg Buy</span>
-                <span>${{ pos.avgBuyPrice | number:'1.2-2' }}</span>
-              </div>
-              <div class="pos-detail">
-                <span class="detail-label">Current</span>
-                <span>${{ getCurrentPrice(pos.coinId) | number:'1.2-2' }}</span>
-              </div>
-              <div class="pos-detail">
-                <span class="detail-label">Value</span>
-                <span>${{ getPositionValue(pos) | number:'1.2-2' }}</span>
-              </div>
+              }
+            </span>
+            <div class="pnl-cell" [class.green]="getPositionPnl(pos) >= 0" [class.red]="getPositionPnl(pos) < 0">
+              {{ getPositionPnl(pos) >= 0 ? '+' : '' }}${{ getPositionPnl(pos) | number:'1.2-2' }}
+              <small>{{ getPositionPnlPct(pos) | number:'1.2-2' }}%</small>
             </div>
-
-            <div class="pos-footer">
-              <div class="change-24h" [class.green]="getChange24h(pos.coinId) >= 0" [class.red]="getChange24h(pos.coinId) < 0">
-                24h: {{ getChange24h(pos.coinId) >= 0 ? '▲' : '▼' }} {{ getChange24h(pos.coinId) | number:'1.2-2' }}%
-              </div>
-              <button class="btn-danger-sm" (click)="removePosition(pos._id)">Remove</button>
-            </div>
+            <button class="close-btn" (click)="openCloseModal(pos)">Close</button>
           </div>
         }
       </div>
     }
   }
 </section>
+
+<!-- Close position confirmation modal -->
+@if (confirmPosition) {
+  <div class="confirm-overlay" (click)="cancelClose()">
+    <div class="confirm-box" (click)="$event.stopPropagation()">
+      <h3>Close Position</h3>
+      <p>
+        Sell <strong>{{ confirmPosition.quantity | number:'1.0-6' }} {{ confirmPosition.symbol }}</strong>
+        at market price <strong>${{ getCurrentPrice(confirmPosition.coinId) | number:'1.2-2' }}</strong>?<br><br>
+        Estimated return: <strong>${{ getPositionValue(confirmPosition) | number:'1.2-2' }}</strong>
+      </p>
+      <div class="confirm-actions">
+        <button class="btn-cancel" (click)="cancelClose()">Cancel</button>
+        <button class="btn-close-pos" [disabled]="isClosing" (click)="closePosition()">
+          {{ isClosing ? 'Closing...' : 'Close Position' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

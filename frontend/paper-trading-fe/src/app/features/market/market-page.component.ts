@@ -37,9 +37,12 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
   private candleSeries: any = null;
   private pricesInterval: any;
 
-  get currentUser() {
-    return this.authService.currentUser();
-  }
+  readonly TIMEFRAMES = [
+    { label: '1D', days: '1' }, { label: '7D', days: '7' },
+    { label: '1M', days: '30' }, { label: '3M', days: '90' },
+  ];
+
+  get currentUser() { return this.authService.currentUser; }
 
   get filteredPrices(): CoinPrice[] {
     const q = this.searchQuery.toLowerCase();
@@ -47,13 +50,6 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
       c.symbol.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
     );
   }
-
-  readonly TIMEFRAMES = [
-    { label: '1D', days: '1' },
-    { label: '7D', days: '7' },
-    { label: '1M', days: '30' },
-    { label: '3M', days: '90' },
-  ];
 
   constructor(
     private readonly authService: AuthService,
@@ -77,7 +73,7 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
     this.http.get<any>(`${environment.apiUrl}/prices`).subscribe({
       next: (response) => {
         const prices: CoinPrice[] = response.data.prices;
-        if (prices && prices.length > 0 && prices[0].price > 0) {
+        if (prices?.length > 0 && prices[0].price > 0) {
           this.prices = prices;
           this.isLoadingPrices = false;
           if (this.selectedCoin) {
@@ -105,10 +101,7 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
   setTimeframe(days: string): void {
     this.activeTimeframe = days;
     if (this.selectedCoin) {
-      if (this.candleSeries) {
-        this.chart?.removeSeries(this.candleSeries);
-        this.candleSeries = null;
-      }
+      if (this.candleSeries) { this.chart?.removeSeries(this.candleSeries); this.candleSeries = null; }
       this.loadChartData(this.selectedCoin.id, days);
     }
   }
@@ -117,17 +110,11 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
     if (!this.chartContainer?.nativeElement) return;
     this.destroyChart();
     this.chart = createChart(this.chartContainer.nativeElement, {
-      layout: {
-        background: { type: ColorType.Solid, color: '#080c18' },
-        textColor: '#64748b',
-      },
-      grid: {
-        vertLines: { color: '#1a2540' },
-        horzLines: { color: '#1a2540' },
-      },
+      layout: { background: { type: ColorType.Solid, color: '#0a0a0f' }, textColor: '#606078' },
+      grid: { vertLines: { color: '#222230' }, horzLines: { color: '#222230' } },
       crosshair: { mode: 1 },
-      rightPriceScale: { borderColor: '#1a2540' },
-      timeScale: { borderColor: '#1a2540', timeVisible: true },
+      rightPriceScale: { borderColor: '#222230' },
+      timeScale: { borderColor: '#222230', timeVisible: true },
       width: this.chartContainer.nativeElement.clientWidth,
       height: this.chartContainer.nativeElement.clientHeight || 380,
     });
@@ -136,19 +123,12 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
   loadChartData(coinId: string, days: string): void {
     if (!this.chart) return;
     this.isLoadingChart = true;
-
-    if (this.candleSeries) {
-      this.chart.removeSeries(this.candleSeries);
-      this.candleSeries = null;
-    }
+    if (this.candleSeries) { this.chart.removeSeries(this.candleSeries); this.candleSeries = null; }
 
     this.candleSeries = this.chart.addSeries(CandlestickSeries, {
-      upColor: '#00d4aa',
-      downColor: '#ff4757',
-      borderUpColor: '#00d4aa',
-      borderDownColor: '#ff4757',
-      wickUpColor: '#00d4aa',
-      wickDownColor: '#ff4757',
+      upColor: '#22c55e', downColor: '#ef4444',
+      borderUpColor: '#22c55e', borderDownColor: '#ef4444',
+      wickUpColor: '#22c55e', wickDownColor: '#ef4444',
     });
 
     this.http.get<any>(`${environment.apiUrl}/chart/${coinId}?days=${days}`).subscribe({
@@ -165,11 +145,7 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   destroyChart(): void {
-    if (this.chart) {
-      this.chart.remove();
-      this.chart = null;
-      this.candleSeries = null;
-    }
+    if (this.chart) { this.chart.remove(); this.chart = null; this.candleSeries = null; }
   }
 
   getTotal(): number {
@@ -191,21 +167,17 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     this.tradeError = '';
     this.isSubmitting = true;
-
     this.tradeService.executeTrade({
-      coinId: this.selectedCoin.id,
-      symbol: this.selectedCoin.symbol,
-      name: this.selectedCoin.name,
-      type: this.tradeType,
-      quantity: this.quantity,
-      price: this.selectedCoin.price
+      coinId: this.selectedCoin.id, symbol: this.selectedCoin.symbol,
+      name: this.selectedCoin.name, type: this.tradeType,
+      quantity: this.quantity, price: this.selectedCoin.price
     }).subscribe({
       next: (response) => {
         this.authService.updateBalance(response.data.newBalance);
-        this.tradeSuccess = `✅ ${this.tradeType === 'buy' ? 'Bought' : 'Sold'} ${this.quantity} ${this.selectedCoin!.symbol} at $${this.selectedCoin!.price.toLocaleString()}`;
+        this.tradeSuccess = `${this.tradeType === 'buy' ? 'Bought' : 'Sold'} ${this.quantity} ${this.selectedCoin!.symbol}`;
         this.isSubmitting = false;
         this.quantity = 0;
-        setTimeout(() => { this.tradeSuccess = ''; }, 4000);
+        setTimeout(() => { this.tradeSuccess = ''; }, 3000);
       },
       error: (err) => {
         this.tradeError = err.error?.message ?? 'Trade failed.';

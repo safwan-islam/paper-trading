@@ -6,6 +6,8 @@ import { forkJoin } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import { AuthService } from '../../core/auth.service';
 import { PortfolioService } from '../../core/portfolio.service';
+import { TradeService } from '../../core/trade.service';
+import { RealtimeService } from '../../core/realtime.service';
 import { Position, CoinPrice } from '../../core/models';
 import { environment } from '../../../environments/environment';
 
@@ -23,16 +25,19 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
   isLoading: boolean = true;
   isReloading: boolean = false;
   pageError: string = '';
+  confirmPosition: Position | null = null;
+  isClosing: boolean = false;
 
   private pricesInterval: any;
 
-  get currentUser() {
-    return this.authService.currentUser();
-  }
+  get currentUser() { return this.authService.currentUser; }
+  get onlineCount() { return this.realtimeService.onlineCount; }
 
   constructor(
     private readonly authService: AuthService,
     private readonly portfolioService: PortfolioService,
+    private readonly tradeService: TradeService,
+    private readonly realtimeService: RealtimeService,
     private readonly router: Router,
     private readonly http: HttpClient
   ) {}
@@ -41,6 +46,11 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
     this.loadDashboard();
     this.fetchPrices();
     this.pricesInterval = setInterval(() => this.fetchPrices(), 10000);
+
+    this.realtimeService.onPortfolioUpdatedCallback((data) => {
+      this.authService.updateBalance(data.balance);
+      this.loadDashboard();
+    });
   }
 
   ngOnDestroy(): void {
@@ -58,31 +68,28 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
         this.positions = portfolio.data.positions;
         this.loadSparklines(portfolio.data.positions);
       },
-      error: (err) => { this.pageError = err.error?.message ?? 'Failed to load dashboard.'; }
+      error: (err) => { this.pageError = err.error?.message ?? 'Failed to load.'; }
     });
   }
 
   reloadBalance(): void {
     this.isReloading = true;
-    forkJoin({
-      me: this.authService.fetchMe(),
-      portfolio: this.portfolioService.getPortfolio()
-    }).pipe(finalize(() => { this.isReloading = false; })).subscribe({
-      next: ({ me, portfolio }) => {
-        this.authService.setCurrentUser(me.data.user);
-        this.positions = portfolio.data.positions;
-      },
-      error: (err) => { this.pageError = err.error?.message ?? 'Failed to reload.'; }
-    });
+    forkJoin({ me: this.authService.fetchMe(), portfolio: this.portfolioService.getPortfolio() })
+      .pipe(finalize(() => { this.isReloading = false; }))
+      .subscribe({
+        next: ({ me, portfolio }) => {
+          this.authService.setCurrentUser(me.data.user);
+          this.positions = portfolio.data.positions;
+        },
+        error: (err) => { this.pageError = err.error?.message ?? 'Failed to reload.'; }
+      });
   }
 
   fetchPrices(): void {
     this.http.get<any>(`${environment.apiUrl}/prices`).subscribe({
       next: (response) => {
         const prices: CoinPrice[] = response.data.prices;
-        if (prices && prices.length > 0 && prices[0].price > 0) {
-          this.prices = prices;
-        }
+        if (prices?.length > 0 && prices[0].price > 0) this.prices = prices;
       }
     });
   }
@@ -94,12 +101,10 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
           const candles = response.data.candles ?? [];
           if (candles.length < 2) return;
           const pts = candles.map((c: any) => c.close);
-          const min = Math.min(...pts);
-          const max = Math.max(...pts);
-          const w = 120, h = 40;
+          const min = Math.min(...pts), max = Math.max(...pts);
           const points = pts.map((p: number, i: number) => {
-            const x = (i / (pts.length - 1)) * w;
-            const y = h - ((p - min) / (max - min || 1)) * h;
+            const x = (i / (pts.length - 1)) * 80;
+            const y = 32 - ((p - min) / (max - min || 1)) * 32;
             return `${x},${y}`;
           }).join(' ');
           this.sparklines[pos.coinId] = points;
@@ -126,8 +131,7 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
 
   getPositionPnlPct(pos: Position): number {
     const cost = pos.avgBuyPrice * pos.quantity;
-    if (cost === 0) return 0;
-    return (this.getPositionPnl(pos) / cost) * 100;
+    return cost === 0 ? 0 : (this.getPositionPnl(pos) / cost) * 100;
   }
 
   getTotalPortfolioValue(): number {
@@ -135,17 +139,41 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
   }
 
   getTotalPnl(): number {
-    return (this.currentUser?.balance ?? 0) + this.getTotalPortfolioValue() - 10000;
+    return this.positions.reduce((sum, p) => sum + this.getPositionPnl(p), 0);
   }
 
-  goToMarket(): void {
-    this.router.navigateByUrl('/market');
+  openCloseModal(pos: Position): void {
+    this.confirmPosition = pos;
   }
 
-  removePosition(id: string): void {
-    this.portfolioService.deletePosition(id).subscribe({
-      next: () => { this.positions = this.positions.filter(p => p._id !== id); },
-      error: (err) => { this.pageError = err.error?.message ?? 'Failed to remove position.'; }
+  cancelClose(): void {
+    this.confirmPosition = null;
+  }
+
+  // Close position = sell all at market price
+  closePosition(): void {
+    const pos = this.confirmPosition;
+    if (!pos) return;
+    const price = this.getCurrentPrice(pos.coinId);
+    if (price === 0) { this.pageError = 'Price not available. Try again.'; this.confirmPosition = null; return; }
+    this.isClosing = true;
+    this.tradeService.executeTrade({
+      coinId: pos.coinId, symbol: pos.symbol, name: pos.name,
+      type: 'sell', quantity: pos.quantity, price
+    }).subscribe({
+      next: (response) => {
+        this.authService.updateBalance(response.data.newBalance);
+        this.positions = this.positions.filter(p => p._id !== pos._id);
+        this.confirmPosition = null;
+        this.isClosing = false;
+      },
+      error: (err) => {
+        this.pageError = err.error?.message ?? 'Failed to close position.';
+        this.confirmPosition = null;
+        this.isClosing = false;
+      }
     });
   }
+
+  goToMarket(): void { this.router.navigateByUrl('/market'); }
 }

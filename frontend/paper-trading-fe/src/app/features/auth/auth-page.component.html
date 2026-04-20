@@ -3,15 +3,15 @@
     <div class="auth-header">
       <div class="logo">📈</div>
       <h1>PaperTrade</h1>
-      <p>{{ isLogin() ? 'Sign in to your account' : 'Start trading with $10,000 virtual cash' }}</p>
+      <p>{{ isLogin ? 'Sign in to your account' : 'Start trading with $10,000 virtual cash' }}</p>
     </div>
 
-    @if (errorMessage()) {
-      <p class="error">{{ errorMessage() }}</p>
+    @if (errorMessage) {
+      <p class="error">{{ errorMessage }}</p>
     }
 
     <div class="form">
-      @if (!isLogin()) {
+      @if (!isLogin) {
         <label>
           <span>Full Name</span>
           <input type="text" [(ngModel)]="name" placeholder="John Doe" />
@@ -25,14 +25,14 @@
         <span>Password</span>
         <input type="password" [(ngModel)]="password" placeholder="••••••••" (keyup.enter)="submit()" />
       </label>
-      <button (click)="submit()" [disabled]="isLoading()">
-        {{ isLoading() ? 'Loading...' : (isLogin() ? 'Sign In' : 'Create Account') }}
+      <button (click)="submit()" [disabled]="isLoading">
+        {{ isLoading ? 'Loading...' : (isLogin ? 'Sign In' : 'Create Account') }}
       </button>
     </div>
 
     <p class="toggle">
-      {{ isLogin() ? "Don't have an account?" : 'Already have an account?' }}
-      <span (click)="toggleMode()">{{ isLogin() ? 'Register' : 'Sign In' }}</span>
+      {{ isLogin ? "Don't have an account?" : 'Already have an account?' }}
+      <span (click)="toggleMode()">{{ isLogin ? 'Register' : 'Sign In' }}</span>
     </p>
   </div>
 </div>

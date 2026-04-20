@@ -1,0 +1,50 @@
+<section class="page">
+  <div class="page-header">
+    <div>
+      <h1>Wallet</h1>
+      <p class="subtitle">Add virtual funds to your trading account</p>
+    </div>
+  </div>
+
+  <div class="wallet-grid">
+    <div class="balance-card">
+      <span class="bal-label">Current Balance</span>
+      <span class="bal-value">${{ (currentUser?.balance ?? 0) | number:'1.2-2' }}</span>
+      <p class="bal-note">Virtual funds for paper trading only</p>
+    </div>
+
+    <div class="deposit-card">
+      <h2>Add Funds</h2>
+
+      @if (errorMessage) { <p class="error">{{ errorMessage }}</p> }
+      @if (successMessage) { <p class="success">{{ successMessage }}</p> }
+
+      <div class="preset-amounts">
+        @for (amount of PRESET_AMOUNTS; track amount) {
+          <button class="preset-btn" (click)="addFunds(amount)" [disabled]="isLoading">
+            +${{ amount | number }}
+          </button>
+        }
+      </div>
+
+      <div class="divider">or enter custom amount</div>
+
+      <div class="custom-input-row">
+        <div class="input-wrapper">
+          <span class="input-prefix">$</span>
+          <input
+            type="number"
+            [(ngModel)]="customAmount"
+            placeholder="0"
+            min="1"
+            max="100000" />
+        </div>
+        <button class="btn-add" (click)="addFunds(customAmount)" [disabled]="isLoading">
+          {{ isLoading ? 'Adding...' : 'Add Funds' }}
+        </button>
+      </div>
+
+      <p class="limit-note">Maximum deposit: $100,000 per transaction</p>
+    </div>
+  </div>
+</section>

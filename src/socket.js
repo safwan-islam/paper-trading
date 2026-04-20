@@ -3,6 +3,8 @@ const https = require("https");
 
 let io;
 let priceInterval;
+let previousPrices = {};
+let onlineUsers = 0;
 
 const COINS = [
     { id: "bitcoin",     symbol: "BTC",  name: "Bitcoin",   kraken: "XXBTZUSD" },
@@ -38,24 +40,15 @@ const fetchFromKraken = (path) => {
 const fetchPrices = async () => {
     const pairs = COINS.map(c => c.kraken).join(",");
     const data = await fetchFromKraken(`/0/public/Ticker?pair=${pairs}`);
-    
-    if (data.error && data.error.length > 0) {
-        throw new Error(data.error[0]);
-    }
-
+    if (data.error && data.error.length > 0) throw new Error(data.error[0]);
     const prices = COINS.map((coin) => {
         const result = data.result;
-        const key = Object.keys(result || {}).find(k => 
-            k.includes(coin.kraken) || k.includes(coin.symbol)
-        );
+        const key = Object.keys(result || {}).find(k => k.includes(coin.kraken) || k.includes(coin.symbol));
         const ticker = key ? result[key] : null;
         return {
-            id: coin.id,
-            symbol: coin.symbol,
-            name: coin.name,
+            id: coin.id, symbol: coin.symbol, name: coin.name,
             price: ticker ? parseFloat(ticker.c[0]) : 0,
-            change24h: ticker ? 
-                ((parseFloat(ticker.c[0]) - parseFloat(ticker.o)) / parseFloat(ticker.o)) * 100 : 0,
+            change24h: ticker ? ((parseFloat(ticker.c[0]) - parseFloat(ticker.o)) / parseFloat(ticker.o)) * 100 : 0,
         };
     });
     cachedPrices = prices;
@@ -65,54 +58,69 @@ const fetchPrices = async () => {
 const fetchChart = async (coinId, days) => {
     const coin = COINS.find(c => c.id === coinId);
     if (!coin) throw new Error("Unknown coin");
-
-    let interval = 1440; // daily in minutes
+    let interval = 1440;
     if (days === "1") interval = 60;
     if (days === "7") interval = 240;
-
-    const data = await fetchFromKraken(
-        `/0/public/OHLC?pair=${coin.kraken}&interval=${interval}`
-    );
-
-    if (data.error && data.error.length > 0) {
-        throw new Error(data.error[0]);
-    }
-
+    const data = await fetchFromKraken(`/0/public/OHLC?pair=${coin.kraken}&interval=${interval}`);
+    if (data.error && data.error.length > 0) throw new Error(data.error[0]);
     const result = data.result;
     const key = Object.keys(result).find(k => k !== "last");
     const ohlc = result[key] || [];
-
     return ohlc.slice(-90).map(d => ({
-        time: d[0],
-        open: parseFloat(d[1]),
-        high: parseFloat(d[2]),
-        low: parseFloat(d[3]),
-        close: parseFloat(d[4]),
+        time: d[0], open: parseFloat(d[1]), high: parseFloat(d[2]),
+        low: parseFloat(d[3]), close: parseFloat(d[4]),
     }));
 };
 
-const getCoinId = (coinId) => {
-    return COINS.find(c => c.id === coinId) ? coinId : null;
+const getCoinId = (coinId) => COINS.find(c => c.id === coinId) ? coinId : null;
+
+const checkPriceAlerts = (newPrices) => {
+    if (!io || Object.keys(previousPrices).length === 0) return;
+    newPrices.forEach((coin) => {
+        const prev = previousPrices[coin.id];
+        if (!prev || prev === 0 || coin.price === 0) return;
+        const changePct = ((coin.price - prev) / prev) * 100;
+        if (Math.abs(changePct) >= 3) {
+            const dir = changePct > 0 ? "🚀" : "📉";
+            io.emit("price:alert", {
+                coinId: coin.id, symbol: coin.symbol,
+                message: `${dir} ${coin.symbol} ${changePct > 0 ? '+' : ''}${changePct.toFixed(2)}% — $${coin.price.toLocaleString()}`,
+            });
+        }
+    });
+    newPrices.forEach(c => { previousPrices[c.id] = c.price; });
 };
 
 const initializeSocket = (server) => {
     io = new Server(server, { cors: { origin: "*" } });
 
     io.on("connection", (socket) => {
-        console.log("Client connected:", socket.id);
+        onlineUsers++;
+        // WebSocket 6: online:count — broadcast live user count
+        io.emit("online:count", { count: onlineUsers });
+
         if (cachedPrices.length > 0) {
             socket.emit("price:update", { prices: cachedPrices });
         }
+
         socket.on("join", (userId) => { socket.join(userId); });
+
         socket.on("disconnect", () => {
-            console.log("Client disconnected:", socket.id);
+            onlineUsers = Math.max(0, onlineUsers - 1);
+            io.emit("online:count", { count: onlineUsers });
         });
     });
 
     const pollPrices = async () => {
         try {
             const prices = await fetchPrices();
+            // WebSocket 1: price:update
             io.emit("price:update", { prices });
+            // WebSocket 3: price:alert
+            checkPriceAlerts(prices);
+            if (Object.keys(previousPrices).length === 0) {
+                prices.forEach(c => { previousPrices[c.id] = c.price; });
+            }
         } catch (error) {
             console.log("Failed to fetch prices:", error.message);
         }
@@ -123,14 +131,47 @@ const initializeSocket = (server) => {
     return io;
 };
 
+// WebSocket 2: trade:executed — private to user
 const emitTradeExecuted = (userId, trade) => {
     if (!io) return;
     io.to(userId.toString()).emit("trade:executed", {
-        message: "Trade executed successfully!",
+        message: `✓ ${trade.type.toUpperCase()} ${trade.quantity.toFixed(4)} ${trade.symbol} @ $${trade.price.toLocaleString()}`,
         data: { trade },
     });
 };
 
-const getCachedPrices = () => cachedPrices;
+// WebSocket 4: portfolio:updated — private to user
+const emitPortfolioUpdated = (userId, balance, positions) => {
+    if (!io) return;
+    io.to(userId.toString()).emit("portfolio:updated", {
+        message: "Portfolio updated.",
+        data: { balance, positions },
+    });
+};
 
-module.exports = { initializeSocket, emitTradeExecuted, getCachedPrices, fetchChart, getCoinId };
+// WebSocket 5: funds:added — private to user
+const emitFundsAdded = (userId, amount, newBalance) => {
+    if (!io) return;
+    io.to(userId.toString()).emit("funds:added", {
+        message: `💰 $${amount.toLocaleString()} added to your account`,
+        data: { amount, newBalance },
+    });
+};
+
+// WebSocket 7: trade:broadcast — public feed visible to everyone
+const emitTradeBroadcast = (trade) => {
+    if (!io) return;
+    const emoji = trade.type === "buy" ? "🟢" : "🔴";
+    io.emit("trade:broadcast", {
+        message: `${emoji} Someone just ${trade.type === "buy" ? "bought" : "sold"} ${trade.symbol}`,
+        data: { symbol: trade.symbol, type: trade.type },
+    });
+};
+
+const getCachedPrices = () => cachedPrices;
+const getOnlineCount = () => onlineUsers;
+
+module.exports = {
+    initializeSocket, emitTradeExecuted, emitPortfolioUpdated,
+    emitFundsAdded, emitTradeBroadcast, getCachedPrices, fetchChart, getCoinId, getOnlineCount
+};

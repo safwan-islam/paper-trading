@@ -2,11 +2,7 @@
 
   <aside class="sidebar">
     <div class="sidebar-header">
-      <input
-        class="search-input"
-        type="text"
-        placeholder="Search..."
-        [(ngModel)]="searchQuery" />
+      <input class="search-input" type="text" placeholder="Search markets..." [(ngModel)]="searchQuery" />
     </div>
     <div class="coin-list">
       @for (coin of filteredPrices; track coin.id) {
@@ -28,8 +24,8 @@
   <main class="chart-area">
     @if (!selectedCoin) {
       <div class="chart-placeholder">
-        <div class="placeholder-icon">📈</div>
-        <p>Select a coin from the left to view chart</p>
+        <div class="placeholder-icon">📊</div>
+        <p>Select a market to view chart</p>
       </div>
     } @else {
       <div class="chart-topbar">
@@ -37,7 +33,7 @@
           <span class="chart-symbol">{{ selectedCoin.symbol }}/USD</span>
           <span class="chart-price">${{ selectedCoin.price | number:'1.2-2' }}</span>
           <span class="chart-change" [class.green]="selectedCoin.change24h >= 0" [class.red]="selectedCoin.change24h < 0">
-            {{ selectedCoin.change24h >= 0 ? '▲' : '▼' }} {{ selectedCoin.change24h | number:'1.2-2' }}%
+            {{ selectedCoin.change24h >= 0 ? '+' : '' }}{{ selectedCoin.change24h | number:'1.2-2' }}%
           </span>
         </div>
         <div class="timeframe-tabs">
@@ -48,7 +44,6 @@
           }
         </div>
       </div>
-
       <div class="chart-wrapper">
         @if (isLoadingChart) {
           <div class="chart-loading">Loading chart...</div>
@@ -60,33 +55,33 @@
 
   <aside class="order-panel">
     <div class="balance-info">
-      <span class="bal-label">Available Balance</span>
-      <span class="bal-value">${{ (currentUser?.balance ?? 0) | number:'1.2-2' }}</span>
+      <div class="bal-label">Available Balance</div>
+      <div class="bal-value">${{ (currentUser?.balance ?? 0) | number:'1.2-2' }}</div>
     </div>
 
     @if (!selectedCoin) {
-      <div class="order-placeholder">Select a coin to trade</div>
+      <div class="order-placeholder">Select a market to place an order</div>
     } @else {
       <div class="order-tabs">
         <button [class.tab-buy]="tradeType === 'buy'" (click)="tradeType = 'buy'">Buy</button>
         <button [class.tab-sell]="tradeType === 'sell'" (click)="tradeType = 'sell'">Sell</button>
       </div>
 
-      @if (tradeError) { <p class="order-error">{{ tradeError }}</p> }
-      @if (tradeSuccess) { <p class="order-success">{{ tradeSuccess }}</p> }
+      <div class="order-body">
+        @if (tradeError) { <p class="order-error">{{ tradeError }}</p> }
+        @if (tradeSuccess) { <p class="order-success">{{ tradeSuccess }}</p> }
 
-      <div class="order-form">
         <div class="order-field">
-          <label>Price (USD)</label>
+          <label>Price</label>
           <div class="order-input locked">
             <span>${{ selectedCoin.price | number:'1.2-2' }}</span>
-            <span class="market-tag">Market</span>
+            <span class="market-tag">MARKET</span>
           </div>
         </div>
 
         <div class="order-field">
           <label>Amount ({{ selectedCoin.symbol }})</label>
-          <input type="number" class="order-input" [(ngModel)]="quantity" placeholder="0.00" min="0" step="0.0001" />
+          <input type="number" class="order-input" [(ngModel)]="quantity" placeholder="0.0000" min="0" step="0.0001" />
         </div>
 
         <div class="quick-amounts">
@@ -109,10 +104,9 @@
           [class.submit-sell]="tradeType === 'sell'"
           [disabled]="isSubmitting"
           (click)="submitTrade()">
-          {{ isSubmitting ? 'Processing...' : (tradeType === 'buy' ? 'Buy ' + selectedCoin.symbol : 'Sell ' + selectedCoin.symbol) }}
+          {{ isSubmitting ? 'Executing...' : (tradeType === 'buy' ? 'Buy ' + selectedCoin.symbol : 'Sell ' + selectedCoin.symbol) }}
         </button>
       </div>
     }
   </aside>
-
 </div>

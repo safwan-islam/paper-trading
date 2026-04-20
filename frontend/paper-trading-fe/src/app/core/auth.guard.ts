@@ -5,19 +5,13 @@ import { AuthService } from './auth.service';
 export const authGuard: CanActivateFn = () => {
   const authService = inject(AuthService);
   const router = inject(Router);
-
-  if (authService.isLoggedIn()) {
-    return true;
-  }
+  if (authService.isLoggedIn()) return true;
   return router.createUrlTree(['/login']);
 };
 
 export const guestGuard: CanActivateFn = () => {
   const authService = inject(AuthService);
   const router = inject(Router);
-
-  if (!authService.isLoggedIn()) {
-    return true;
-  }
+  if (!authService.isLoggedIn()) return true;
   return router.createUrlTree(['/dashboard']);
 };
