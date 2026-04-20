@@ -13,12 +13,12 @@ export class RealtimeService {
   lastPriceAlert: string = '';
   onlineCount: number = 0;
 
-  private cbPriceUpdate: ((p: CoinPrice[]) => void) | null = null;
-  private cbPortfolioUpdated: ((d: any) => void) | null = null;
-  private cbFundsAdded: ((d: any) => void) | null = null;
-  private cbPriceAlert: ((d: any) => void) | null = null;
-  private cbTradeBroadcast: ((d: any) => void) | null = null;
-  private cbOnlineCount: ((d: any) => void) | null = null;
+  private cbsPriceUpdate: ((p: CoinPrice[]) => void)[] = [];
+  private cbsPortfolioUpdated: ((d: any) => void)[] = [];
+  private cbsFundsAdded: ((d: any) => void)[] = [];
+  private cbsPriceAlert: ((d: any) => void)[] = [];
+  private cbsTradeBroadcast: ((d: any) => void)[] = [];
+  private cbsOnlineCount: ((d: any) => void)[] = [];
 
   connect(userId: string): void {
     if (this.socket?.connected) return;
@@ -26,58 +26,57 @@ export class RealtimeService {
 
     this.socket.on('connect', () => { this.socket?.emit('join', userId); });
 
-    // WS1: price:update
     this.socket.on('price:update', (data: { prices: CoinPrice[] }) => {
       this.prices = data.prices;
-      if (this.cbPriceUpdate) this.cbPriceUpdate(data.prices);
+      this.cbsPriceUpdate.forEach(cb => cb(data.prices));
     });
 
-    // WS2: trade:executed (private)
     this.socket.on('trade:executed', (data: { message: string }) => {
       this.lastTradeNotification = data.message;
       setTimeout(() => { this.lastTradeNotification = ''; }, 4000);
     });
 
-    // WS3: price:alert
     this.socket.on('price:alert', (data: any) => {
       this.lastPriceAlert = data.message;
-      if (this.cbPriceAlert) this.cbPriceAlert(data);
+      this.cbsPriceAlert.forEach(cb => cb(data));
       setTimeout(() => { this.lastPriceAlert = ''; }, 5000);
     });
 
-    // WS4: portfolio:updated (private)
     this.socket.on('portfolio:updated', (data: any) => {
-      if (this.cbPortfolioUpdated) this.cbPortfolioUpdated(data.data);
+      this.cbsPortfolioUpdated.forEach(cb => cb(data.data));
     });
 
-    // WS5: funds:added (private)
     this.socket.on('funds:added', (data: any) => {
       this.lastFundsAdded = data.message;
-      if (this.cbFundsAdded) this.cbFundsAdded(data.data);
+      this.cbsFundsAdded.forEach(cb => cb(data.data));
       setTimeout(() => { this.lastFundsAdded = ''; }, 4000);
     });
 
-    // WS6: online:count (public)
     this.socket.on('online:count', (data: { count: number }) => {
       this.onlineCount = data.count;
-      if (this.cbOnlineCount) this.cbOnlineCount(data);
+      this.cbsOnlineCount.forEach(cb => cb(data));
     });
 
-    // WS7: trade:broadcast (public feed)
     this.socket.on('trade:broadcast', (data: any) => {
-      if (this.cbTradeBroadcast) this.cbTradeBroadcast(data);
+      this.cbsTradeBroadcast.forEach(cb => cb(data));
     });
   }
 
-  onPriceUpdateCallback(cb: (p: CoinPrice[]) => void) { this.cbPriceUpdate = cb; }
-  onPortfolioUpdatedCallback(cb: (d: any) => void) { this.cbPortfolioUpdated = cb; }
-  onFundsAddedCallback(cb: (d: any) => void) { this.cbFundsAdded = cb; }
-  onPriceAlertCallback(cb: (d: any) => void) { this.cbPriceAlert = cb; }
-  onTradeBroadcastCallback(cb: (d: any) => void) { this.cbTradeBroadcast = cb; }
-  onOnlineCountCallback(cb: (d: any) => void) { this.cbOnlineCount = cb; }
+  onPriceUpdateCallback(cb: (p: CoinPrice[]) => void) { this.cbsPriceUpdate.push(cb); }
+  onPortfolioUpdatedCallback(cb: (d: any) => void) { this.cbsPortfolioUpdated.push(cb); }
+  onFundsAddedCallback(cb: (d: any) => void) { this.cbsFundsAdded.push(cb); }
+  onPriceAlertCallback(cb: (d: any) => void) { this.cbsPriceAlert.push(cb); }
+  onTradeBroadcastCallback(cb: (d: any) => void) { this.cbsTradeBroadcast.push(cb); }
+  onOnlineCountCallback(cb: (d: any) => void) { this.cbsOnlineCount.push(cb); }
 
   disconnect(): void {
     this.socket?.disconnect();
     this.socket = null;
+    this.cbsPriceUpdate = [];
+    this.cbsPortfolioUpdated = [];
+    this.cbsFundsAdded = [];
+    this.cbsPriceAlert = [];
+    this.cbsTradeBroadcast = [];
+    this.cbsOnlineCount = [];
   }
 }
