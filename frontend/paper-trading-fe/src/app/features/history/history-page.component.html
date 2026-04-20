@@ -1,18 +1,16 @@
 <section class="page">
   <div class="page-header">
     <div>
-      <h1>Trade History</h1>
-      <p class="subtitle">All your past paper trades</p>
+      <h1>History</h1>
+      <p class="subtitle">Your past trades</p>
     </div>
   </div>
 
-  @if (pageError()) {
-    <p class="error">{{ pageError() }}</p>
-  }
+  @if (pageError) { <p class="error">{{ pageError }}</p> }
 
-  @if (isLoading()) {
+  @if (isLoading) {
     <div class="loading">Loading history...</div>
-  } @else if (trades().length === 0) {
+  } @else if (trades.length === 0) {
     <div class="empty">No trades yet. Go to Market to execute your first trade!</div>
   } @else {
     <div class="history-table">
@@ -27,7 +25,7 @@
         <span></span>
       </div>
 
-      @for (trade of trades(); track trade._id) {
+      @for (trade of trades; track trade._id) {
         <div class="table-row">
           <span class="date">{{ trade.createdAt | date:'dd/MM/yy HH:mm' }}</span>
           <span class="asset"><strong>{{ trade.symbol }}</strong></span>
@@ -39,15 +37,15 @@
           <span class="total">${{ trade.total | number:'1.2-2' }}</span>
 
           <span class="note-cell">
-            @if (editingId() === trade._id) {
-              <input type="text" [ngModel]="editNote()" (ngModelChange)="editNote.set($event)" placeholder="Add note..." />
+            @if (editingId === trade._id) {
+              <input type="text" [(ngModel)]="editNote" placeholder="Add note..." />
             } @else {
               <span class="note-text">{{ trade.note || '—' }}</span>
             }
           </span>
 
           <span class="actions">
-            @if (editingId() === trade._id) {
+            @if (editingId === trade._id) {
               <button class="btn-save" (click)="saveNote(trade._id)">Save</button>
             } @else {
               <button class="btn-edit" (click)="startEdit(trade)">Edit</button>
