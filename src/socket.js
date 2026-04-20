@@ -80,7 +80,7 @@ const checkPriceAlerts = (newPrices) => {
         const prev = previousPrices[coin.id];
         if (!prev || prev === 0 || coin.price === 0) return;
         const changePct = ((coin.price - prev) / prev) * 100;
-        if (Math.abs(changePct) >= 3) {
+        if (Math.abs(changePct) >= 0.2) {
             const dir = changePct > 0 ? "🚀" : "📉";
             io.emit("price:alert", {
                 coinId: coin.id, symbol: coin.symbol,

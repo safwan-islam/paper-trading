@@ -80,13 +80,34 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
       next: (response) => {
         const trades = response.data.trades;
         let pnl = 0;
-        trades.forEach((trade: any) => {
-          if (trade.type === 'sell') {
-            pnl += trade.total;
+  
+        // Group buys by coin to track average buy price
+        const buyAvg: Record<string, { totalCost: number; totalQty: number }> = {};
+  
+        // Process trades in chronological order (oldest first)
+        const sorted = [...trades].reverse();
+  
+        sorted.forEach((trade: any) => {
+          if (trade.type === 'buy') {
+            if (!buyAvg[trade.coinId]) {
+              buyAvg[trade.coinId] = { totalCost: 0, totalQty: 0 };
+            }
+            buyAvg[trade.coinId].totalCost += trade.total;
+            buyAvg[trade.coinId].totalQty += trade.quantity;
           } else {
-            pnl -= trade.total;
+            // Sell — calculate realized pnl
+            const avg = buyAvg[trade.coinId];
+            if (avg && avg.totalQty > 0) {
+              const avgBuyPrice = avg.totalCost / avg.totalQty;
+              const realizedOnThisSell = (trade.price - avgBuyPrice) * trade.quantity;
+              pnl += realizedOnThisSell;
+              // Reduce remaining buy quantity
+              avg.totalCost -= avgBuyPrice * trade.quantity;
+              avg.totalQty -= trade.quantity;
+            }
           }
         });
+  
         this.realizedPnl = parseFloat(pnl.toFixed(2));
       }
     });
