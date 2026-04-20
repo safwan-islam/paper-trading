@@ -36,6 +36,12 @@
           {{ getTotalPnl() >= 0 ? '+' : '' }}${{ getTotalPnl() | number:'1.2-2' }}
         </div>
       </div>
+      <div class="stat-card" [class.pnl-positive]="realizedPnl >= 0" [class.pnl-negative]="realizedPnl < 0">
+        <div class="stat-label">Realized P&L</div>
+        <div class="stat-value" [class.green]="realizedPnl >= 0" [class.red]="realizedPnl < 0">
+          {{ realizedPnl >= 0 ? '+' : '' }}${{ realizedPnl | number:'1.2-2' }}
+        </div>
+      </div>
       <div class="stat-card">
         <div class="stat-label">Total Value</div>
         <div class="stat-value">${{ ((currentUser?.balance ?? 0) + getTotalPortfolioValue()) | number:'1.2-2' }}</div>
@@ -58,7 +64,7 @@
           <span>Avg Entry</span>
           <span>Mark Price</span>
           <span>7D</span>
-          <span>PnL</span>
+          <span>Unrealized P&L</span>
           <span></span>
         </div>
         @for (pos of positions; track pos._id) {
@@ -97,7 +103,6 @@
   }
 </section>
 
-<!-- Close position confirmation modal -->
 @if (confirmPosition) {
   <div class="confirm-overlay" (click)="cancelClose()">
     <div class="confirm-box" (click)="$event.stopPropagation()">

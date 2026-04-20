@@ -27,6 +27,7 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
   pageError: string = '';
   confirmPosition: Position | null = null;
   isClosing: boolean = false;
+  realizedPnl: number = 0;
 
   get currentUser() { return this.authService.currentUser; }
   get onlineCount() { return this.realtimeService.onlineCount; }
@@ -42,8 +43,8 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadDashboard();
+    this.loadRealizedPnl();
 
-    // Listen to WebSocket prices - updates every second
     this.realtimeService.onPriceUpdateCallback((prices) => {
       if (prices?.length > 0 && prices[0].price > 0) {
         this.prices = prices;
@@ -53,6 +54,7 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
     this.realtimeService.onPortfolioUpdatedCallback((data) => {
       this.authService.updateBalance(data.balance);
       this.loadDashboard();
+      this.loadRealizedPnl();
     });
   }
 
@@ -73,17 +75,35 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
     });
   }
 
+  loadRealizedPnl(): void {
+    this.tradeService.getTrades().subscribe({
+      next: (response) => {
+        const trades = response.data.trades;
+        let pnl = 0;
+        trades.forEach((trade: any) => {
+          if (trade.type === 'sell') {
+            pnl += trade.total;
+          } else {
+            pnl -= trade.total;
+          }
+        });
+        this.realizedPnl = parseFloat(pnl.toFixed(2));
+      }
+    });
+  }
+
   reloadBalance(): void {
     this.isReloading = true;
-    forkJoin({ me: this.authService.fetchMe(), portfolio: this.portfolioService.getPortfolio() })
-      .pipe(finalize(() => { this.isReloading = false; }))
-      .subscribe({
-        next: ({ me, portfolio }) => {
-          this.authService.setCurrentUser(me.data.user);
-          this.positions = portfolio.data.positions;
-        },
-        error: (err) => { this.pageError = err.error?.message ?? 'Failed to reload.'; }
-      });
+    forkJoin({
+      me: this.authService.fetchMe(),
+      portfolio: this.portfolioService.getPortfolio()
+    }).pipe(finalize(() => { this.isReloading = false; })).subscribe({
+      next: ({ me, portfolio }) => {
+        this.authService.setCurrentUser(me.data.user);
+        this.positions = portfolio.data.positions;
+      },
+      error: (err) => { this.pageError = err.error?.message ?? 'Failed to reload.'; }
+    });
   }
 
   loadSparklines(positions: Position[]): void {
@@ -161,6 +181,7 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
         this.positions = this.positions.filter(p => p._id !== pos._id);
         this.confirmPosition = null;
         this.isClosing = false;
+        this.loadRealizedPnl();
       },
       error: (err) => {
         this.pageError = err.error?.message ?? 'Failed to close position.';

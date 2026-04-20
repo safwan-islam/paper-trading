@@ -3,11 +3,11 @@
 .btn-reload:hover { border-color: var(--border2); color: var(--text); }
 .btn-reload:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
+.stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 28px; }
 
 .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; }
 .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 500; margin-bottom: 8px; }
-.stat-value { font-size: 22px; font-weight: 700; color: var(--text); font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px; }
+.stat-value { font-size: 20px; font-weight: 700; color: var(--text); font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px; }
 .stat-card.pnl-positive { border-color: rgba(34,197,94,0.2); background: linear-gradient(135deg, var(--surface) 0%, rgba(34,197,94,0.04) 100%); }
 .stat-card.pnl-negative { border-color: rgba(239,68,68,0.2); background: linear-gradient(135deg, var(--surface) 0%, rgba(239,68,68,0.04) 100%); }
 
