@@ -5,10 +5,6 @@
       <p class="subtitle">Your paper trading portfolio</p>
     </div>
     <div class="header-actions">
-      <div class="online-badge">
-        <span class="online-dot"></span>
-        {{ onlineCount }} online
-      </div>
       <button class="btn-reload" (click)="reloadBalance()" [disabled]="isReloading">
         {{ isReloading ? 'Refreshing...' : '↻ Refresh' }}
       </button>

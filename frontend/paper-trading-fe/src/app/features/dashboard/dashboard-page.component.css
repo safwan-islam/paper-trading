@@ -48,7 +48,3 @@
 .empty { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 60px; text-align: center; }
 .empty p { color: var(--muted); font-size: 14px; }
 .empty span { color: var(--accent); cursor: pointer; font-weight: 500; }
-
-.online-badge { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-.online-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
