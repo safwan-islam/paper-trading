@@ -96,7 +96,6 @@ const initializeSocket = (server) => {
 
     io.on("connection", (socket) => {
         onlineUsers++;
-        // WebSocket 6: online:count — broadcast live user count
         io.emit("online:count", { count: onlineUsers });
 
         if (cachedPrices.length > 0) {
@@ -114,9 +113,7 @@ const initializeSocket = (server) => {
     const pollPrices = async () => {
         try {
             const prices = await fetchPrices();
-            // WebSocket 1: price:update
             io.emit("price:update", { prices });
-            // WebSocket 3: price:alert
             checkPriceAlerts(prices);
             if (Object.keys(previousPrices).length === 0) {
                 prices.forEach(c => { previousPrices[c.id] = c.price; });
@@ -128,10 +125,21 @@ const initializeSocket = (server) => {
 
     pollPrices();
     priceInterval = setInterval(pollPrices, 15000);
+
+    // Simulate micro price movements every second between real updates
+    setInterval(() => {
+        if (!io || cachedPrices.length === 0) return;
+        const simulated = cachedPrices.map(coin => ({
+            ...coin,
+            price: parseFloat((coin.price * (1 + (Math.random() - 0.5) * 0.001)).toFixed(8)),
+        }));
+        cachedPrices = simulated;
+        io.emit("price:update", { prices: simulated });
+    }, 1000);
+
     return io;
 };
 
-// WebSocket 2: trade:executed — private to user
 const emitTradeExecuted = (userId, trade) => {
     if (!io) return;
     io.to(userId.toString()).emit("trade:executed", {
@@ -140,7 +148,6 @@ const emitTradeExecuted = (userId, trade) => {
     });
 };
 
-// WebSocket 4: portfolio:updated — private to user
 const emitPortfolioUpdated = (userId, balance, positions) => {
     if (!io) return;
     io.to(userId.toString()).emit("portfolio:updated", {
@@ -149,7 +156,6 @@ const emitPortfolioUpdated = (userId, balance, positions) => {
     });
 };
 
-// WebSocket 5: funds:added — private to user
 const emitFundsAdded = (userId, amount, newBalance) => {
     if (!io) return;
     io.to(userId.toString()).emit("funds:added", {
@@ -158,7 +164,6 @@ const emitFundsAdded = (userId, amount, newBalance) => {
     });
 };
 
-// WebSocket 7: trade:broadcast — public feed visible to everyone
 const emitTradeBroadcast = (trade) => {
     if (!io) return;
     const emoji = trade.type === "buy" ? "🟢" : "🔴";
