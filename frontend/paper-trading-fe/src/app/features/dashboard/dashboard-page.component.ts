@@ -28,8 +28,6 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
   confirmPosition: Position | null = null;
   isClosing: boolean = false;
 
-  private pricesInterval: any;
-
   get currentUser() { return this.authService.currentUser; }
   get onlineCount() { return this.realtimeService.onlineCount; }
 
@@ -44,8 +42,13 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadDashboard();
-    this.fetchPrices();
-    this.pricesInterval = setInterval(() => this.fetchPrices(), 10000);
+
+    // Listen to WebSocket prices - updates every second
+    this.realtimeService.onPriceUpdateCallback((prices) => {
+      if (prices?.length > 0 && prices[0].price > 0) {
+        this.prices = prices;
+      }
+    });
 
     this.realtimeService.onPortfolioUpdatedCallback((data) => {
       this.authService.updateBalance(data.balance);
@@ -53,9 +56,7 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
     });
   }
 
-  ngOnDestroy(): void {
-    if (this.pricesInterval) clearInterval(this.pricesInterval);
-  }
+  ngOnDestroy(): void {}
 
   loadDashboard(): void {
     this.isLoading = true;
@@ -83,15 +84,6 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
         },
         error: (err) => { this.pageError = err.error?.message ?? 'Failed to reload.'; }
       });
-  }
-
-  fetchPrices(): void {
-    this.http.get<any>(`${environment.apiUrl}/prices`).subscribe({
-      next: (response) => {
-        const prices: CoinPrice[] = response.data.prices;
-        if (prices?.length > 0 && prices[0].price > 0) this.prices = prices;
-      }
-    });
   }
 
   loadSparklines(positions: Position[]): void {
@@ -150,12 +142,15 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
     this.confirmPosition = null;
   }
 
-  // Close position = sell all at market price
   closePosition(): void {
     const pos = this.confirmPosition;
     if (!pos) return;
     const price = this.getCurrentPrice(pos.coinId);
-    if (price === 0) { this.pageError = 'Price not available. Try again.'; this.confirmPosition = null; return; }
+    if (price === 0) {
+      this.pageError = 'Price not available. Try again.';
+      this.confirmPosition = null;
+      return;
+    }
     this.isClosing = true;
     this.tradeService.executeTrade({
       coinId: pos.coinId, symbol: pos.symbol, name: pos.name,

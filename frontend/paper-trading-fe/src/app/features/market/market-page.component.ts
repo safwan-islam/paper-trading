@@ -7,6 +7,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../core/auth.service';
 import { TradeService } from '../../core/trade.service';
+import { RealtimeService } from '../../core/realtime.service';
 import { CoinPrice } from '../../core/models';
 import { createChart, CandlestickSeries, ColorType } from 'lightweight-charts';
 import { environment } from '../../../environments/environment';
@@ -35,7 +36,6 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private chart: any = null;
   private candleSeries: any = null;
-  private pricesInterval: any;
 
   readonly TIMEFRAMES = [
     { label: '1D', days: '1' }, { label: '7D', days: '7' },
@@ -54,36 +54,39 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
   constructor(
     private readonly authService: AuthService,
     private readonly tradeService: TradeService,
+    private readonly realtimeService: RealtimeService,
     private readonly http: HttpClient
   ) {}
 
   ngOnInit(): void {
-    this.fetchPrices();
-    this.pricesInterval = setInterval(() => this.fetchPrices(), 10000);
+    // Listen to WebSocket prices - updates every second
+    this.realtimeService.onPriceUpdateCallback((prices) => {
+      if (prices?.length > 0 && prices[0].price > 0) {
+        this.prices = prices;
+        this.isLoadingPrices = false;
+        if (this.selectedCoin) {
+          const updated = prices.find(p => p.id === this.selectedCoin!.id);
+          if (updated) this.selectedCoin = updated;
+        }
+      }
+    });
+
+    // Initial fallback via HTTP
+    this.http.get<any>(`${environment.apiUrl}/prices`).subscribe({
+      next: (response) => {
+        const prices = response.data.prices;
+        if (prices?.length > 0 && prices[0].price > 0) {
+          this.prices = prices;
+          this.isLoadingPrices = false;
+        }
+      }
+    });
   }
 
   ngAfterViewInit(): void {}
 
   ngOnDestroy(): void {
-    if (this.pricesInterval) clearInterval(this.pricesInterval);
     this.destroyChart();
-  }
-
-  fetchPrices(): void {
-    this.http.get<any>(`${environment.apiUrl}/prices`).subscribe({
-      next: (response) => {
-        const prices: CoinPrice[] = response.data.prices;
-        if (prices?.length > 0 && prices[0].price > 0) {
-          this.prices = prices;
-          this.isLoadingPrices = false;
-          if (this.selectedCoin) {
-            const updated = prices.find(p => p.id === this.selectedCoin!.id);
-            if (updated) this.selectedCoin = updated;
-          }
-        }
-      },
-      error: () => { this.isLoadingPrices = false; }
-    });
   }
 
   selectCoin(coin: CoinPrice): void {
