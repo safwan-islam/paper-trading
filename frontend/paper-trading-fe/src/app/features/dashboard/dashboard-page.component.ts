@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal, DestroyRef, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -7,6 +7,7 @@ import { finalize } from 'rxjs/operators';
 import { AuthService } from '../../core/auth.service';
 import { PortfolioService } from '../../core/portfolio.service';
 import { Position, CoinPrice } from '../../core/models';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-dashboard-page',
@@ -16,122 +17,103 @@ import { Position, CoinPrice } from '../../core/models';
   styleUrl: './dashboard-page.component.css'
 })
 export class DashboardPageComponent implements OnInit, OnDestroy {
-  private readonly authService = inject(AuthService);
-  private readonly portfolioService = inject(PortfolioService);
-  private readonly router = inject(Router);
-  private readonly http = inject(HttpClient);
-  private readonly destroyRef = inject(DestroyRef);
+  positions: Position[] = [];
+  prices: CoinPrice[] = [];
+  sparklines: Record<string, string> = {};
+  isLoading: boolean = true;
+  isReloading: boolean = false;
+  pageError: string = '';
 
-  readonly currentUser = computed(() => this.authService.currentUser());
-  readonly positions = signal<Position[]>([]);
-  readonly prices = signal<CoinPrice[]>([]);
-  readonly isLoading = signal(true);
-  readonly isReloading = signal(false);
-  readonly pageError = signal('');
-  readonly sparklines = signal<Record<string, string>>({});
+  private pricesInterval: any;
 
-  private pollInterval: any;
+  get currentUser() {
+    return this.authService.currentUser();
+  }
 
-  readonly COINS = [
-    { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin' },
-    { id: 'ethereum', symbol: 'ETH', name: 'Ethereum' },
-    { id: 'solana', symbol: 'SOL', name: 'Solana' },
-    { id: 'binancecoin', symbol: 'BNB', name: 'BNB' },
-    { id: 'cardano', symbol: 'ADA', name: 'Cardano' },
-    { id: 'dogecoin', symbol: 'DOGE', name: 'Dogecoin' },
-    { id: 'ripple', symbol: 'XRP', name: 'XRP' },
-    { id: 'avalanche-2', symbol: 'AVAX', name: 'Avalanche' },
-  ];
+  constructor(
+    private readonly authService: AuthService,
+    private readonly portfolioService: PortfolioService,
+    private readonly router: Router,
+    private readonly http: HttpClient
+  ) {}
 
   ngOnInit(): void {
     this.loadDashboard();
     this.fetchPrices();
-    this.pollInterval = setInterval(() => this.fetchPrices(), 15000);
-    this.destroyRef.onDestroy(() => {
-      if (this.pollInterval) clearInterval(this.pollInterval);
-    });
+    this.pricesInterval = setInterval(() => this.fetchPrices(), 10000);
   }
 
   ngOnDestroy(): void {
-    if (this.pollInterval) clearInterval(this.pollInterval);
+    if (this.pricesInterval) clearInterval(this.pricesInterval);
   }
 
   loadDashboard(): void {
-    this.isLoading.set(true);
+    this.isLoading = true;
     forkJoin({
       me: this.authService.fetchMe(),
       portfolio: this.portfolioService.getPortfolio()
-    }).pipe(finalize(() => this.isLoading.set(false))).subscribe({
+    }).pipe(finalize(() => { this.isLoading = false; })).subscribe({
       next: ({ me, portfolio }) => {
         this.authService.setCurrentUser(me.data.user);
-        this.positions.set(portfolio.data.positions);
+        this.positions = portfolio.data.positions;
         this.loadSparklines(portfolio.data.positions);
       },
-      error: (err) => this.pageError.set(err.error?.message ?? 'Failed to load dashboard.')
+      error: (err) => { this.pageError = err.error?.message ?? 'Failed to load dashboard.'; }
     });
   }
 
   reloadBalance(): void {
-    this.isReloading.set(true);
+    this.isReloading = true;
     forkJoin({
       me: this.authService.fetchMe(),
       portfolio: this.portfolioService.getPortfolio()
-    }).pipe(finalize(() => this.isReloading.set(false))).subscribe({
+    }).pipe(finalize(() => { this.isReloading = false; })).subscribe({
       next: ({ me, portfolio }) => {
         this.authService.setCurrentUser(me.data.user);
-        this.positions.set(portfolio.data.positions);
+        this.positions = portfolio.data.positions;
       },
-      error: (err) => this.pageError.set(err.error?.message ?? 'Failed to reload.')
+      error: (err) => { this.pageError = err.error?.message ?? 'Failed to reload.'; }
     });
   }
 
   fetchPrices(): void {
-    const ids = this.COINS.map(c => c.id).join(',');
-    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
-    this.http.get<any>(url).subscribe({
-      next: (data) => {
-        const prices: CoinPrice[] = this.COINS.map(coin => ({
-          id: coin.id, symbol: coin.symbol, name: coin.name,
-          price: data[coin.id]?.usd ?? 0,
-          change24h: data[coin.id]?.usd_24h_change ?? 0,
-        }));
-        this.prices.set(prices);
+    this.http.get<any>(`${environment.apiUrl}/prices`).subscribe({
+      next: (response) => {
+        const prices: CoinPrice[] = response.data.prices;
+        if (prices && prices.length > 0 && prices[0].price > 0) {
+          this.prices = prices;
+        }
       }
     });
   }
 
   loadSparklines(positions: Position[]): void {
     positions.forEach(pos => {
-      const url = `https://api.coingecko.com/api/v3/coins/${pos.coinId}/market_chart?vs_currency=usd&days=7&interval=daily`;
-      this.http.get<any>(url).subscribe({
-        next: (data) => {
-          const raw: [number, number][] = data.prices ?? [];
-          const pts = raw.map(p => p[1]);
-          if (pts.length < 2) return;
+      this.http.get<any>(`${environment.apiUrl}/chart/${pos.coinId}?days=7`).subscribe({
+        next: (response) => {
+          const candles = response.data.candles ?? [];
+          if (candles.length < 2) return;
+          const pts = candles.map((c: any) => c.close);
           const min = Math.min(...pts);
           const max = Math.max(...pts);
           const w = 120, h = 40;
-          const points = pts.map((p, i) => {
+          const points = pts.map((p: number, i: number) => {
             const x = (i / (pts.length - 1)) * w;
             const y = h - ((p - min) / (max - min || 1)) * h;
             return `${x},${y}`;
           }).join(' ');
-          this.sparklines.update(s => ({ ...s, [pos.coinId]: points }));
+          this.sparklines[pos.coinId] = points;
         }
       });
     });
   }
 
-  isSparklinePositive(coinId: string): boolean {
-    return true; // simplified
-  }
-
   getCurrentPrice(coinId: string): number {
-    return this.prices().find(p => p.id === coinId)?.price ?? 0;
+    return this.prices.find(p => p.id === coinId)?.price ?? 0;
   }
 
   getChange24h(coinId: string): number {
-    return this.prices().find(p => p.id === coinId)?.change24h ?? 0;
+    return this.prices.find(p => p.id === coinId)?.change24h ?? 0;
   }
 
   getPositionValue(pos: Position): number {
@@ -149,19 +131,21 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
   }
 
   getTotalPortfolioValue(): number {
-    return this.positions().reduce((sum, p) => sum + this.getPositionValue(p), 0);
+    return this.positions.reduce((sum, p) => sum + this.getPositionValue(p), 0);
   }
 
   getTotalPnl(): number {
-    return (this.currentUser()?.balance ?? 0) + this.getTotalPortfolioValue() - 10000;
+    return (this.currentUser?.balance ?? 0) + this.getTotalPortfolioValue() - 10000;
   }
 
-  goToMarket(): void { this.router.navigateByUrl('/market'); }
+  goToMarket(): void {
+    this.router.navigateByUrl('/market');
+  }
 
   removePosition(id: string): void {
     this.portfolioService.deletePosition(id).subscribe({
-      next: () => this.positions.set(this.positions().filter(p => p._id !== id)),
-      error: (err) => this.pageError.set(err.error?.message ?? 'Failed to remove position.')
+      next: () => { this.positions = this.positions.filter(p => p._id !== id); },
+      error: (err) => { this.pageError = err.error?.message ?? 'Failed to remove position.'; }
     });
   }
 }

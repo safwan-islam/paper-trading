@@ -5,22 +5,22 @@
       <p class="subtitle">Your virtual trading portfolio</p>
     </div>
     <div class="header-actions">
-      <button class="btn-reload" (click)="reloadBalance()" [disabled]="isReloading()">
-        {{ isReloading() ? '↻ Reloading...' : '↻ Reload' }}
+      <button class="btn-reload" (click)="reloadBalance()" [disabled]="isReloading">
+        {{ isReloading ? '↻ Reloading...' : '↻ Reload' }}
       </button>
       <button class="btn-primary" (click)="goToMarket()">+ Trade</button>
     </div>
   </div>
 
-  @if (pageError()) { <p class="error">{{ pageError() }}</p> }
+  @if (pageError) { <p class="error">{{ pageError }}</p> }
 
-  @if (isLoading()) {
+  @if (isLoading) {
     <div class="loading">Loading portfolio...</div>
   } @else {
     <div class="stats-row">
       <div class="stat-card">
         <span class="stat-label">Cash Balance</span>
-        <span class="stat-value">${{ (currentUser()?.balance ?? 0) | number:'1.2-2' }}</span>
+        <span class="stat-value">${{ (currentUser?.balance ?? 0) | number:'1.2-2' }}</span>
       </div>
       <div class="stat-card">
         <span class="stat-label">Portfolio Value</span>
@@ -34,19 +34,19 @@
       </div>
       <div class="stat-card">
         <span class="stat-label">Total Value</span>
-        <span class="stat-value">${{ ((currentUser()?.balance ?? 0) + getTotalPortfolioValue()) | number:'1.2-2' }}</span>
+        <span class="stat-value">${{ ((currentUser?.balance ?? 0) + getTotalPortfolioValue()) | number:'1.2-2' }}</span>
       </div>
     </div>
 
     <div class="section-title">Open Positions</div>
 
-    @if (positions().length === 0) {
+    @if (positions.length === 0) {
       <div class="empty">
         <p>No open positions. <span (click)="goToMarket()">Go to Market</span> to start trading!</p>
       </div>
     } @else {
       <div class="positions-grid">
-        @for (pos of positions(); track pos._id) {
+        @for (pos of positions; track pos._id) {
           <div class="position-card">
             <div class="pos-header">
               <div class="pos-asset">
@@ -59,12 +59,11 @@
               </div>
             </div>
 
-            <!-- Sparkline chart -->
-            @if (sparklines()[pos.coinId]) {
+            @if (sparklines[pos.coinId]) {
               <div class="sparkline-container">
                 <svg viewBox="0 0 120 40" class="sparkline" preserveAspectRatio="none">
                   <polyline
-                    [attr.points]="sparklines()[pos.coinId]"
+                    [attr.points]="sparklines[pos.coinId]"
                     fill="none"
                     [attr.stroke]="getPositionPnl(pos) >= 0 ? '#00d4aa' : '#ff4757'"
                     stroke-width="1.5"

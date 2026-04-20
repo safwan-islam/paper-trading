@@ -1,6 +1,6 @@
 import {
-  Component, computed, inject, signal, OnInit, OnDestroy,
-  ElementRef, ViewChild, AfterViewInit, ChangeDetectorRef
+  Component, OnInit, OnDestroy,
+  ElementRef, ViewChild, AfterViewInit
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -8,7 +8,8 @@ import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../core/auth.service';
 import { TradeService } from '../../core/trade.service';
 import { CoinPrice } from '../../core/models';
-import { createChart, LineSeries, ColorType } from 'lightweight-charts';
+import { createChart, CandlestickSeries, ColorType } from 'lightweight-charts';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-market-page',
@@ -20,38 +21,32 @@ import { createChart, LineSeries, ColorType } from 'lightweight-charts';
 export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('chartContainer') chartContainer!: ElementRef;
 
-  private readonly authService = inject(AuthService);
-  private readonly tradeService = inject(TradeService);
-  private readonly http = inject(HttpClient);
-  private readonly cdr = inject(ChangeDetectorRef);
-
-  readonly currentUser = computed(() => this.authService.currentUser());
-  readonly localPrices = signal<CoinPrice[]>([]);
-  readonly selectedCoin = signal<CoinPrice | null>(null);
-  readonly tradeType = signal<'buy' | 'sell'>('buy');
-  readonly quantity = signal(0);
-  readonly isSubmitting = signal(false);
-  readonly tradeError = signal('');
-  readonly tradeSuccess = signal('');
-  readonly isLoadingPrices = signal(true);
-  readonly isLoadingChart = signal(false);
-  readonly activeTimeframe = signal('7');
-  readonly searchQuery = signal('');
+  prices: CoinPrice[] = [];
+  selectedCoin: CoinPrice | null = null;
+  tradeType: 'buy' | 'sell' = 'buy';
+  quantity: number = 0;
+  isSubmitting: boolean = false;
+  tradeError: string = '';
+  tradeSuccess: string = '';
+  isLoadingPrices: boolean = true;
+  isLoadingChart: boolean = false;
+  activeTimeframe: string = '7';
+  searchQuery: string = '';
 
   private chart: any = null;
   private candleSeries: any = null;
-  private pollInterval: any;
+  private pricesInterval: any;
 
-  readonly COINS = [
-    { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin' },
-    { id: 'ethereum', symbol: 'ETH', name: 'Ethereum' },
-    { id: 'solana', symbol: 'SOL', name: 'Solana' },
-    { id: 'binancecoin', symbol: 'BNB', name: 'BNB' },
-    { id: 'cardano', symbol: 'ADA', name: 'Cardano' },
-    { id: 'dogecoin', symbol: 'DOGE', name: 'Dogecoin' },
-    { id: 'ripple', symbol: 'XRP', name: 'XRP' },
-    { id: 'avalanche-2', symbol: 'AVAX', name: 'Avalanche' },
-  ];
+  get currentUser() {
+    return this.authService.currentUser();
+  }
+
+  get filteredPrices(): CoinPrice[] {
+    const q = this.searchQuery.toLowerCase();
+    return this.prices.filter(c =>
+      c.symbol.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+    );
+  }
 
   readonly TIMEFRAMES = [
     { label: '1D', days: '1' },
@@ -60,74 +55,67 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
     { label: '3M', days: '90' },
   ];
 
-  readonly filteredPrices = computed(() => {
-    const q = this.searchQuery().toLowerCase();
-    return this.localPrices().filter(c =>
-      c.symbol.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
-    );
-  });
+  constructor(
+    private readonly authService: AuthService,
+    private readonly tradeService: TradeService,
+    private readonly http: HttpClient
+  ) {}
 
   ngOnInit(): void {
     this.fetchPrices();
-    this.pollInterval = setInterval(() => this.fetchPrices(), 15000);
+    this.pricesInterval = setInterval(() => this.fetchPrices(), 10000);
   }
 
-  ngAfterViewInit(): void {
-    if (this.selectedCoin()) {
-      setTimeout(() => this.initChart(), 100);
-    }
-  }
+  ngAfterViewInit(): void {}
 
   ngOnDestroy(): void {
-    if (this.pollInterval) clearInterval(this.pollInterval);
+    if (this.pricesInterval) clearInterval(this.pricesInterval);
     this.destroyChart();
   }
 
   fetchPrices(): void {
-    const ids = this.COINS.map(c => c.id).join(',');
-    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
-    this.http.get<any>(url).subscribe({
-      next: (data) => {
-        const prices: CoinPrice[] = this.COINS.map(coin => ({
-          id: coin.id, symbol: coin.symbol, name: coin.name,
-          price: data[coin.id]?.usd ?? 0,
-          change24h: data[coin.id]?.usd_24h_change ?? 0,
-        }));
-        this.localPrices.set(prices);
-        this.isLoadingPrices.set(false);
-        const sel = this.selectedCoin();
-        if (sel) {
-          const updated = prices.find(p => p.id === sel.id);
-          if (updated) this.selectedCoin.set(updated);
+    this.http.get<any>(`${environment.apiUrl}/prices`).subscribe({
+      next: (response) => {
+        const prices: CoinPrice[] = response.data.prices;
+        if (prices && prices.length > 0 && prices[0].price > 0) {
+          this.prices = prices;
+          this.isLoadingPrices = false;
+          if (this.selectedCoin) {
+            const updated = prices.find(p => p.id === this.selectedCoin!.id);
+            if (updated) this.selectedCoin = updated;
+          }
         }
       },
-      error: () => this.isLoadingPrices.set(false)
+      error: () => { this.isLoadingPrices = false; }
     });
   }
 
   selectCoin(coin: CoinPrice): void {
-    this.selectedCoin.set(coin);
-    this.tradeError.set('');
-    this.tradeSuccess.set('');
-    this.quantity.set(0);
+    this.selectedCoin = coin;
+    this.tradeError = '';
+    this.tradeSuccess = '';
+    this.quantity = 0;
     this.destroyChart();
-    this.cdr.detectChanges();
     setTimeout(() => {
       this.initChart();
-      this.loadChartData(coin.id, this.activeTimeframe());
+      this.loadChartData(coin.id, this.activeTimeframe);
     }, 100);
   }
 
   setTimeframe(days: string): void {
-    this.activeTimeframe.set(days);
-    const coin = this.selectedCoin();
-    if (coin) this.loadChartData(coin.id, days);
+    this.activeTimeframe = days;
+    if (this.selectedCoin) {
+      if (this.candleSeries) {
+        this.chart?.removeSeries(this.candleSeries);
+        this.candleSeries = null;
+      }
+      this.loadChartData(this.selectedCoin.id, days);
+    }
   }
 
   initChart(): void {
     if (!this.chartContainer?.nativeElement) return;
     this.destroyChart();
-
     this.chart = createChart(this.chartContainer.nativeElement, {
       layout: {
         background: { type: ColorType.Solid, color: '#080c18' },
@@ -141,37 +129,38 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
       rightPriceScale: { borderColor: '#1a2540' },
       timeScale: { borderColor: '#1a2540', timeVisible: true },
       width: this.chartContainer.nativeElement.clientWidth,
-      height: 380,
+      height: this.chartContainer.nativeElement.clientHeight || 380,
     });
   }
 
   loadChartData(coinId: string, days: string): void {
     if (!this.chart) return;
-    this.isLoadingChart.set(true);
+    this.isLoadingChart = true;
 
     if (this.candleSeries) {
       this.chart.removeSeries(this.candleSeries);
       this.candleSeries = null;
     }
 
-    this.candleSeries = this.chart.addSeries(LineSeries, {
-      color: '#00d4aa',
-      lineWidth: 2,
+    this.candleSeries = this.chart.addSeries(CandlestickSeries, {
+      upColor: '#00d4aa',
+      downColor: '#ff4757',
+      borderUpColor: '#00d4aa',
+      borderDownColor: '#ff4757',
+      wickUpColor: '#00d4aa',
+      wickDownColor: '#ff4757',
     });
 
-    const url = `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`;
-    this.http.get<any>(url).subscribe({
-      next: (data) => {
-        const prices: [number, number][] = data.prices ?? [];
-        const lineData = prices.map(([time, value]) => ({
-          time: Math.floor(time / 1000) as any,
-          value,
-        }));
-        this.candleSeries.setData(lineData);
-        this.chart?.timeScale().fitContent();
-        this.isLoadingChart.set(false);
+    this.http.get<any>(`${environment.apiUrl}/chart/${coinId}?days=${days}`).subscribe({
+      next: (response) => {
+        const candles = response.data.candles;
+        if (this.candleSeries && candles?.length > 0) {
+          this.candleSeries.setData(candles);
+          this.chart?.timeScale().fitContent();
+        }
+        this.isLoadingChart = false;
       },
-      error: () => this.isLoadingChart.set(false)
+      error: () => { this.isLoadingChart = false; }
     });
   }
 
@@ -184,45 +173,43 @@ export class MarketPageComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   getTotal(): number {
-    const coin = this.selectedCoin();
-    if (!coin) return 0;
-    return parseFloat((this.quantity() * coin.price).toFixed(2));
-  }
-
-  getMaxQty(): number {
-    const coin = this.selectedCoin();
-    const balance = this.currentUser()?.balance ?? 0;
-    if (!coin || coin.price === 0) return 0;
-    return parseFloat((balance / coin.price).toFixed(6));
+    if (!this.selectedCoin) return 0;
+    return parseFloat((this.quantity * this.selectedCoin.price).toFixed(2));
   }
 
   setQuickAmount(pct: number): void {
-    const max = this.getMaxQty();
-    this.quantity.set(parseFloat((max * pct).toFixed(6)));
+    const balance = this.currentUser?.balance ?? 0;
+    const price = this.selectedCoin?.price ?? 0;
+    if (price === 0) return;
+    this.quantity = parseFloat(((balance / price) * pct).toFixed(6));
   }
 
   submitTrade(): void {
-    const coin = this.selectedCoin();
-    if (!coin || this.quantity() <= 0) {
-      this.tradeError.set('Please enter a valid quantity.');
+    if (!this.selectedCoin || this.quantity <= 0) {
+      this.tradeError = 'Please enter a valid quantity.';
       return;
     }
-    this.tradeError.set('');
-    this.isSubmitting.set(true);
+    this.tradeError = '';
+    this.isSubmitting = true;
+
     this.tradeService.executeTrade({
-      coinId: coin.id, symbol: coin.symbol, name: coin.name,
-      type: this.tradeType(), quantity: this.quantity(), price: coin.price
+      coinId: this.selectedCoin.id,
+      symbol: this.selectedCoin.symbol,
+      name: this.selectedCoin.name,
+      type: this.tradeType,
+      quantity: this.quantity,
+      price: this.selectedCoin.price
     }).subscribe({
       next: (response) => {
         this.authService.updateBalance(response.data.newBalance);
-        this.tradeSuccess.set(`✅ ${this.tradeType() === 'buy' ? 'Bought' : 'Sold'} ${this.quantity()} ${coin.symbol} at $${coin.price.toLocaleString()}`);
-        this.isSubmitting.set(false);
-        this.quantity.set(0);
-        setTimeout(() => this.tradeSuccess.set(''), 4000);
+        this.tradeSuccess = `✅ ${this.tradeType === 'buy' ? 'Bought' : 'Sold'} ${this.quantity} ${this.selectedCoin!.symbol} at $${this.selectedCoin!.price.toLocaleString()}`;
+        this.isSubmitting = false;
+        this.quantity = 0;
+        setTimeout(() => { this.tradeSuccess = ''; }, 4000);
       },
       error: (err) => {
-        this.tradeError.set(err.error?.message ?? 'Trade failed.');
-        this.isSubmitting.set(false);
+        this.tradeError = err.error?.message ?? 'Trade failed.';
+        this.isSubmitting = false;
       }
     });
   }
